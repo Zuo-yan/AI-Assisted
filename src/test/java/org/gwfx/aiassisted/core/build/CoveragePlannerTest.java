@@ -122,3 +122,4 @@ class CoveragePlannerTest {
         assertTrue(CoveragePlanner.check(null, null, null).ok());
     }
 }
+

@@ -242,3 +242,4 @@
   "ai.ai_assisted.key_source.file": "encrypted file in the run directory",
   "ai.ai_assisted.key_source.session": "this session only (not persisted)"
 }
+

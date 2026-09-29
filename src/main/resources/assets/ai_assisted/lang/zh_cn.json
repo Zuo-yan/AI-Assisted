@@ -23,6 +23,7 @@
   "ai.ai_assisted.error.truncated_reply": "§e回复被最大 token 限制截断（当前 §f%s§e，本次已输出 §f%s§e）§7。建造蓝图这类长参数很容易撞上它：到「更多设置 · 请求与回复」把 ai.maxTokens 调到 2048~4096 再试",
   "ai.ai_assisted.tool.step_limit": "§e已达到工具调用步数上限（ai.toolMaxSteps=%s），回答可能不完整",
   "ai.ai_assisted.tool.timeout": "§e工具调用循环超时（ai.toolLoopTimeoutSeconds=%s 秒），已提前收尾",
+  "ai.ai_assisted.tool.fake_call_warning": "§e⚠ [提示] AI 仅在文本中描述了提议，未发起底层工具调用（可能受模型或接口协议限制）。服务端未收到任何提议，敲 /ai confirm 将无效。",
   "ai.ai_assisted.goal.set": "§a已设定当前目标：§f%s",
   "ai.ai_assisted.goal.show": "§7当前目标：§f%s",
   "ai.ai_assisted.goal.none": "§7当前没有设定目标",
@@ -242,3 +243,4 @@
   "ai.ai_assisted.key_source.file": "运行目录下的加密文件",
   "ai.ai_assisted.key_source.session": "本次会话（未落盘）"
 }
+

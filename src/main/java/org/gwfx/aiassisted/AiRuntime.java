@@ -312,6 +312,7 @@ public final class AiRuntime {
                 Config.aiToolAdminLevel,
                 Config.aiToolDangerousEnabled,
                 Config.aiBuildEnabled,
+                Config.aiBuildAllowNonNaturalTerrain,
                 Config.aiBuildMaxBlocks,
                 Config.aiBuildBlocksPerTick);
     }
@@ -329,3 +330,4 @@ public final class AiRuntime {
         return registry.create(effective, settings);
     }
 }
+

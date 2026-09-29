@@ -607,3 +607,4 @@ public final class AiCommand {
         source.sendSuccess(() -> Component.translatable(translationKey), false);
     }
 }
+

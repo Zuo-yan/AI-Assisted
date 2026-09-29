@@ -239,6 +239,14 @@ public final class Config {
                     ⚠️ 不消耗背包材料 —— 等价于给有权限的人开了一个刷建材的口子，公开服请知情。""")
             .define("ai.build.enabled", false);
 
+    private static final ModConfigSpec.BooleanValue AI_BUILD_ALLOW_NON_NATURAL_TERRAIN = BUILDER
+            .comment("""
+                    是否放权 AI 对建筑/非自然地形的所有操作（默认关闭）。
+                    关闭时（默认）：只能覆盖自然地形（泥土、石头、草、空气等），遇到人工方块整场拒绝，防止意外覆盖建筑；
+                    开启后：放权 AI 修改或拆除人造建筑方块（如木板、石砖、玻璃等），允许执行拆除屋顶、定向清除、做旧装饰等操作。
+                    仍受 /ai undo 撤销保护与不可破坏方块（基岩/末地传送门等）的硬性保护。""")
+            .define("ai.build.allowNonNaturalTerrain", false);
+
     private static final ModConfigSpec.IntValue AI_BUILD_MAX_BLOCKS = BUILDER
             .comment("单次建造的体积上限（按包围盒格子数算，含空气）。它同时限定了覆盖检查的代价")
             .defineInRange("ai.build.maxBlocks", 4096, 1, 32768);
@@ -271,6 +279,7 @@ public final class Config {
             Map.entry("ai.tool.adminLevel", AI_TOOL_ADMIN_LEVEL),
             Map.entry("ai.tool.dangerousEnabled", AI_TOOL_DANGEROUS_ENABLED),
             Map.entry("ai.build.enabled", AI_BUILD_ENABLED),
+            Map.entry("ai.build.allowNonNaturalTerrain", AI_BUILD_ALLOW_NON_NATURAL_TERRAIN),
             Map.entry("ai.build.maxBlocks", AI_BUILD_MAX_BLOCKS),
             Map.entry("ai.build.blocksPerTick", AI_BUILD_BLOCKS_PER_TICK),
             Map.entry("ai.timeoutSeconds", AI_TIMEOUT_SECONDS),
@@ -341,6 +350,7 @@ public final class Config {
     public static boolean aiToolDangerousEnabled = false;
     /** AI 建造总开关（默认关）。开启后才注册 propose_build。 */
     public static boolean aiBuildEnabled = false;
+    public static boolean aiBuildAllowNonNaturalTerrain = false;
     /** 单次建造体积上限（包围盒格子数）。 */
     public static int aiBuildMaxBlocks = 4096;
     /** 每 tick 放置预算。 */
@@ -483,6 +493,7 @@ public final class Config {
         aiToolAdminLevel = AI_TOOL_ADMIN_LEVEL.get();
         aiToolDangerousEnabled = AI_TOOL_DANGEROUS_ENABLED.get();
         aiBuildEnabled = AI_BUILD_ENABLED.get();
+        aiBuildAllowNonNaturalTerrain = AI_BUILD_ALLOW_NON_NATURAL_TERRAIN.get();
         aiBuildMaxBlocks = AI_BUILD_MAX_BLOCKS.get();
         aiBuildBlocksPerTick = AI_BUILD_BLOCKS_PER_TICK.get();
     }
@@ -494,3 +505,4 @@ public final class Config {
 
     private Config() {}
 }
+

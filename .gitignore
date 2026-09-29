@@ -22,8 +22,8 @@ out/
 /run/
 
 # 本地加密密钥存储（绝不能进版本控制）
-config/ai_assisted/ai-secret.dat
+/config/ai_assisted/ai-secret.dat
 
 # 本地运行时与配置
-config/
+/config/
 *.log

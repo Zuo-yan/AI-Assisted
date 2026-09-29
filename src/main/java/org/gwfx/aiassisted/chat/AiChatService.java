@@ -419,3 +419,4 @@ public final class AiChatService {
         return Optional.of(this.keyStore.source());
     }
 }
+

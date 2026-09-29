@@ -69,3 +69,4 @@ public final class CoveragePlanner {
         return new Result(checked, conflicts, false, null);
     }
 }
+
