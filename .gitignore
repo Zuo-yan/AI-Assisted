@@ -1,0 +1,29 @@
+# Eclipse
+.classpath
+.project
+.settings/
+/bin/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Visual Studio Code
+.vscode/
+
+# Gradle
+/.gradle/
+/build/
+
+# NeoForge / Minecraft 运行目录（留给本地测试，不进仓库）
+/run/
+
+# 本地加密密钥存储（绝不能进版本控制）
+config/ai_assisted/ai-secret.dat
+
+# 本地运行时与配置
+config/
+*.log
