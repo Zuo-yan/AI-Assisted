@@ -58,6 +58,12 @@ public final class AiTools {
             if (config.buildEnabled()) {
                 registry.register(ProposeBuildTool.spec(),
                         args -> ProposeBuildTool.invoke(player, config, pendingBuilds, pendingCommands, args));
+                registry.register(ProposeClearTool.spec(),
+                        args -> ProposeClearTool.invoke(player, config, pendingBuilds, pendingCommands, args));
+                registry.register(ProposeDismantleTool.spec(),
+                        args -> ProposeDismantleTool.invoke(player, config, pendingBuilds, pendingCommands, args));
+                registry.register(ProposeDecorateTool.spec(),
+                        args -> ProposeDecorateTool.invoke(player, config, pendingBuilds, pendingCommands, args));
             }
         }
         return registry;

@@ -74,7 +74,12 @@ public final class BuildPlacement {
      *
      * @param offset 建议 ≥2（见类注释的"玩家不在轮廓里"不变量）
      */
-    public static BuildPlacement inFrontOf(int footX, int footY, int footZ, Facing facing, int offset) {
+        /** 恒等映射（绝对坐标）：用于针对世界现有方块的原位修改与清除。 */
+    public static BuildPlacement absolute() {
+        return at(0, 0, 0, Facing.SOUTH);
+    }
+
+public static BuildPlacement inFrontOf(int footX, int footY, int footZ, Facing facing, int offset) {
         Facing safe = facing == null ? Facing.NORTH : facing;
         int steps = Math.max(0, offset);
         return at(footX + safe.stepX() * steps, footY, footZ + safe.stepZ() * steps, safe);
