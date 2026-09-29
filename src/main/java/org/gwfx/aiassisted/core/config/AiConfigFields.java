@@ -134,6 +134,7 @@ public final class AiConfigFields {
             // ===== 更多设置 · AI 建造（T001-6）=====
             // 刻意不塞进 Group.TOOL：那页讲的是"模型能查什么"，这里讲的是"模型能不能改世界"，两类关心点
             bool("ai.build.enabled", Group.BUILD),
+            bool("ai.build.allowNonNaturalTerrain", Group.BUILD),
             num("ai.build.maxBlocks", Kind.INT, Group.BUILD, 1, 32768),
             num("ai.build.blocksPerTick", Kind.INT, Group.BUILD, 1, 512),
 
@@ -227,6 +228,7 @@ public final class AiConfigFields {
             case "ai.tool.adminLevel" -> Integer.toString(config.toolAdminLevel());
             case "ai.tool.dangerousEnabled" -> Boolean.toString(config.dangerousToolsEnabled());
             case "ai.build.enabled" -> Boolean.toString(config.buildEnabled());
+            case "ai.build.allowNonNaturalTerrain" -> Boolean.toString(config.buildAllowNonNaturalTerrain());
             case "ai.build.maxBlocks" -> Integer.toString(config.buildMaxBlocks());
             case "ai.build.blocksPerTick" -> Integer.toString(config.buildBlocksPerTick());
             case "ai.context.entityRadius" -> Integer.toString(config.entityRadius());
