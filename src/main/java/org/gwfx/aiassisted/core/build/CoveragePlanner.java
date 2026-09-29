@@ -38,6 +38,10 @@ public final class CoveragePlanner {
     }
 
     public static Result check(BuildPlan plan, BuildPlacement placement, TerrainProbe probe) {
+        return check(plan, placement, probe, false);
+    }
+
+    public static Result check(BuildPlan plan, BuildPlacement placement, TerrainProbe probe, boolean allowNonNatural) {
         if (plan == null || placement == null || probe == null) {
             return new Result(0, 0, false, null);
         }
@@ -57,7 +61,16 @@ public final class CoveragePlanner {
                 continue;
             }
             checked++;
-            if (!probe.isNaturalTerrain(position.x(), position.y(), position.z())) {
+            if (allowNonNatural) {
+                // 放权模式：允许修改普通人造建筑和自然地形，但仍严格阻断对不可破坏/违规方块（基岩、末地传送门等）的破坏
+                if (current != null && BlueprintValidator.FORBIDDEN_BLOCKS.contains(current)) {
+                    conflicts++;
+                    if (conflicts == 1) {
+                        return new Result(checked, conflicts, false,
+                                new Violation(position.x(), position.y(), position.z(), block.blockId(), current));
+                    }
+                }
+            } else if (!probe.isNaturalTerrain(position.x(), position.y(), position.z())) {
                 conflicts++;
                 if (conflicts == 1) {
                     // 只留第一处：报错只需要一个坐标，玩家据此去挖开那块地
@@ -69,4 +82,3 @@ public final class CoveragePlanner {
         return new Result(checked, conflicts, false, null);
     }
 }
-

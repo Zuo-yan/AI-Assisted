@@ -123,7 +123,7 @@ public final class ProposeBuildTool {
                 facingOf(player), ORIGIN_OFFSET);
 
         // ⑤ 覆盖检查：只碰自然地形，判不准就当人工方块
-        CoveragePlanner.Result coverage = CoveragePlanner.check(plan, placement, new McTerrainProbe(player.level()));
+        CoveragePlanner.Result coverage = CoveragePlanner.check(plan, placement, new McTerrainProbe(player.level()), config.buildAllowNonNaturalTerrain());
         if (coverage.unloadedChunk()) {
             return ToolOutcome.error("目标区域的区块没有加载（你可能站在区块边缘），请让玩家走近一点再试。");
         }

@@ -380,7 +380,7 @@ public final class AiCommand {
 
         // 覆盖复查：提议到现在这段时间里，目标位置可能被人放了东西
         CoveragePlanner.Result coverage = CoveragePlanner.check(
-                pending.plan(), pending.placement(), new McTerrainProbe(player.level()));
+                pending.plan(), pending.placement(), new McTerrainProbe(player.level()), config.buildAllowNonNaturalTerrain());
         if (coverage.unloadedChunk()) {
             context.getSource().sendFailure(Component.translatable("ai.ai_assisted.build.abort_unloaded"));
             return 0;
@@ -390,6 +390,9 @@ public final class AiCommand {
             context.getSource().sendFailure(Component.translatable("ai.ai_assisted.build.blocked",
                     violation.x() + " " + violation.y() + " " + violation.z(),
                     violation.currentBlockId()));
+            if (!config.buildAllowNonNaturalTerrain()) {
+                context.getSource().sendFailure(Component.translatable("ai.ai_assisted.build.blocked_hint"));
+            }
             return 0;
         }
 

@@ -63,6 +63,9 @@ public final class ProposeDecorateTool {
         if (level < config.toolAdminLevel()) {
             return ToolOutcome.error("你的权限等级不足（需要管理等级 " + config.toolAdminLevel() + "），无法提议建筑装饰。");
         }
+        if (!config.buildAllowNonNaturalTerrain()) {
+            return ToolOutcome.error("本服务器未开启「放权建筑操作」（ai.build.allowNonNaturalTerrain=false，默认关闭）。由于建筑修饰涉及修改人造方块，请告知玩家在 AI 配置界面的「更多设置 · AI 建造」中开启「放权建筑操作」。");
+        }
 
         String style = ToolArgs.string(args, "style").orElse("weathering").strip().toLowerCase();
         String densityStr = ToolArgs.string(args, "density").orElse("medium").strip().toLowerCase();
