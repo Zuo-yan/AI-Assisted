@@ -3,6 +3,7 @@ package org.gwfx.aiassisted.net;
 import com.google.gson.JsonObject;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -44,6 +45,8 @@ public record AiTestConnectionPacket(String json) {
             if (player == null) {
                 return;
             }
+            // 异步回调里不能碰世界：server 在这里（主线程）先捕获
+            MinecraftServer server = player.level().getServer();
 
             if (!AiPermissions.allows(player)) {
                 AiPacketHandler.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
@@ -100,7 +103,7 @@ public record AiTestConnectionPacket(String json) {
             testProvider.chat(testRequest)
                     .thenAccept(response -> {
                         long latency = System.currentTimeMillis() - startTime;
-                        AiPacketHandler.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        sendResult(server, player,
                                 new AiTestConnectionResultPacket(true, (int) latency, "连接成功 (" + latency + "ms)"));
                     })
                     .exceptionally(ex -> {
@@ -108,11 +111,23 @@ public record AiTestConnectionPacket(String json) {
                         Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                         String msg = cause.getMessage() != null ? cause.getMessage() : "未知网络错误";
                         String redactedMsg = AiRuntime.get().redactor().redact(msg);
-                        AiPacketHandler.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                                new AiTestConnectionResultPacket(false, (int) latency, redactedMsg));
+                        sendResult(server, player, new AiTestConnectionResultPacket(false, (int) latency, redactedMsg));
                         return null;
                     });
         });
         context.get().setPacketHandled(true);
+    }
+
+    /** 结果包必须回服务端主线程发：网络回调在传输线程，且玩家可能已退出/切世界。 */
+    private static void sendResult(MinecraftServer server, ServerPlayer player, AiTestConnectionResultPacket result) {
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> {
+            if (player.hasDisconnected()) {
+                return;
+            }
+            AiPacketHandler.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), result);
+        });
     }
 }

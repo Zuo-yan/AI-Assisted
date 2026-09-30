@@ -217,56 +217,60 @@ public final class AiChatService {
         this.lastRequestAt.put(player.getUUID(), now);
         this.inFlight.incrementAndGet();
 
-        // 上下文采集必须在这里做：仍在主线程，且早于异步请求。
-        // 最近一次确认执行的指令也在这里带进去 —— 它是"上一轮动作"的事实，属于上下文而非工具产物。
-        ContextSnapshot snapshot = this.collector.collect(player, currentConfig,
-                this.lastCommands.recentFor(player.getUUID(), now));
-        ChatHistory history = this.sessions.history(player.getUUID());
-
-        // 工具注册表绑定到「发起命令的这个玩家」，所以每次请求现建，不能全局复用。
-        // 关闭开关时用空注册表 —— 它的 specs() 为空，请求体里不会出现 tools 字段。
-        // 管理员级工具还会按调用者等级（与危险级开关）二次裁剪，见 AiTools.registryFor。
-        // 配方索引与记忆库相反：它们是跨请求复用才有意义的状态，由 AiRuntime 常驻持有、传进来。
-        ToolRegistry tools = currentConfig.toolCallingEnabled()
-                ? AiTools.registryFor(player, currentConfig, this.recipeIndex,
-                        this.pendingCommands, this.pendingBuilds, this.memories)
-                : ToolRegistry.empty();
-
-        // 记忆读取在主线程完成（首次访问涉及一次读盘），与上下文采集同一段。
-        // 玩家名字是记忆文件的元数据：每次对话顺手刷新，模型才知道「在跟谁说话」
-        String memoryBlock;
-        if (currentConfig.memoryEnabled()) {
-            this.memories.rememberName(player.getUUID(), player.getGameProfile().getName());
-            memoryBlock = this.memories.renderForPrompt(player.getUUID(), currentConfig);
-        } else {
-            memoryBlock = "";
-        }
-
-        List<ChatMessage> messages = new ArrayList<>(history.messages());
-        messages.add(ChatMessage.user(text));
-        ChatRequest request = new ChatRequest(
-                currentConfig.model(),
-                buildSystemPrompt(currentConfig, snapshot, this.goals.goalOf(player.getUUID()), memoryBlock),
-                messages,
-                currentConfig.temperature(),
-                currentConfig.maxTokens(),
-                tools.specs());
-
-        send(player, Component.translatable("ai.ai_assisted.thinking"));
-
-        AgentLoop loop = new AgentLoop(
-                currentProvider,
-                tools,
-                currentConfig.toolMaxSteps(),
-                Duration.ofSeconds(currentConfig.toolLoopTimeoutSeconds()));
-        // 工具执行必须回主线程：AgentLoop 的决策回调跑在传输线程上，不能直接碰世界
-        AgentLoop.ToolCaller caller = call -> dispatchTool(server, tools, call);
-
+        // 采集、注册表与记忆读取都在主线程完成，且必须早于异步请求；
+        // 这一整段到发起请求的任何同步异常都要把并发名额还回去 ——
+        // 少还一次就永久占住一个名额，累计到上限后对话与进服问候都会被"并发已满"拒绝
         CompletableFuture<AgentLoop.Result> future;
+        ChatHistory history;
         try {
+            // 上下文采集必须在这里做：仍在主线程，且早于异步请求。
+            // 最近一次确认执行的指令也在这里带进去 —— 它是"上一轮动作"的事实，属于上下文而非工具产物。
+            ContextSnapshot snapshot = this.collector.collect(player, currentConfig,
+                    this.lastCommands.recentFor(player.getUUID(), now));
+            history = this.sessions.history(player.getUUID());
+
+            // 工具注册表绑定到「发起命令的这个玩家」，所以每次请求现建，不能全局复用。
+            // 关闭开关时用空注册表 —— 它的 specs() 为空，请求体里不会出现 tools 字段。
+            // 管理员级工具还会按调用者等级（与危险级开关）二次裁剪，见 AiTools.registryFor。
+            // 配方索引与记忆库相反：它们是跨请求复用才有意义的状态，由 AiRuntime 常驻持有、传进来。
+            ToolRegistry tools = currentConfig.toolCallingEnabled()
+                    ? AiTools.registryFor(player, currentConfig, this.recipeIndex,
+                            this.pendingCommands, this.pendingBuilds, this.memories)
+                    : ToolRegistry.empty();
+
+            // 记忆读取在主线程完成（首次访问涉及一次读盘），与上下文采集同一段。
+            // 玩家名字是记忆文件的元数据：每次对话顺手刷新，模型才知道「在跟谁说话」
+            String memoryBlock;
+            if (currentConfig.memoryEnabled()) {
+                this.memories.rememberName(player.getUUID(), player.getGameProfile().getName());
+                memoryBlock = this.memories.renderForPrompt(player.getUUID(), currentConfig);
+            } else {
+                memoryBlock = "";
+            }
+
+            List<ChatMessage> messages = new ArrayList<>(history.messages());
+            messages.add(ChatMessage.user(text));
+            ChatRequest request = new ChatRequest(
+                    currentConfig.model(),
+                    buildSystemPrompt(currentConfig, snapshot, this.goals.goalOf(player.getUUID()), memoryBlock),
+                    messages,
+                    currentConfig.temperature(),
+                    currentConfig.maxTokens(),
+                    tools.specs());
+
+            send(player, Component.translatable("ai.ai_assisted.thinking"));
+
+            AgentLoop loop = new AgentLoop(
+                    currentProvider,
+                    tools,
+                    currentConfig.toolMaxSteps(),
+                    Duration.ofSeconds(currentConfig.toolLoopTimeoutSeconds()));
+            // 工具执行必须回主线程：AgentLoop 的决策回调跑在传输线程上，不能直接碰世界
+            AgentLoop.ToolCaller caller = call -> dispatchTool(server, tools, call);
+
             future = loop.run(request, caller);
         } catch (RuntimeException e) {
-            // 同步抛出（例如 baseUrl 非法）时不会有 future，必须在这里把并发计数还回去
+            // 同步抛出（例如 baseUrl 非法、采集器异常）时不会有 future，必须在这里把并发计数还回去
             this.inFlight.decrementAndGet();
             send(player, describeError(e));
             return;

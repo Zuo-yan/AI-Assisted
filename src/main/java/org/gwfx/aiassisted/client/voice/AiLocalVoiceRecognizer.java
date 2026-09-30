@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -107,23 +108,38 @@ public final class AiLocalVoiceRecognizer {
                     "-File", tempScript.getAbsolutePath()
             );
 
+            // stderr 合并进 stdout：管道缓冲写满时 PowerShell 会阻塞，没人排空的 stderr
+            // 会让下面等进程结束的那一步永久挂着（本识别器是单线程执行器，卡一次后续全排队）
+            pb.redirectErrorStream(true);
+
             Process process = pb.start();
             StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("STT_RESULT:")) {
-                        output.append(line.substring("STT_RESULT:".length()).strip());
+            // 输出必须在等进程结束之前就抽干：先 readLine 到 EOF 再 waitFor 的话，
+            // 8 秒超时形同虚设，进程挂住时读取就永久阻塞
+            Thread drain = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.startsWith("STT_RESULT:")) {
+                            output.append(line.substring("STT_RESULT:".length()).strip());
+                        }
                     }
+                } catch (IOException ignored) {
+                    // 进程被强杀时流会中断：已读到的部分照常返回
                 }
-            }
+            }, "AI-Local-STT-Drain");
+            drain.setDaemon(true);
+            drain.start();
 
             boolean finished = process.waitFor(8, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
+                drain.join(1000);
                 LOGGER.debug("[AI-Local-STT] 本地语音识别超时");
                 return "";
             }
+            drain.join(1000);
 
             return output.toString().strip();
         } catch (Exception e) {

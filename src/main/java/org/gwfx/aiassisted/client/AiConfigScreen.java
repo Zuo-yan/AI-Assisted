@@ -37,8 +37,15 @@ public class AiConfigScreen extends AiConfigFormScreen {
     /** 顶部三行：生效 Provider / Key 来源与文件 / 只读提示。 */
     private static final int HEADER_LINES = 3;
 
-    /** API Key 输入框：只写，每次重建控件都从空开始（服务端从不回传密钥）。 */
+    /** API Key 输入框：只写（服务端从不回传密钥，因此不存在"初值"可回填）。 */
     private EditBox apiKeyBox;
+
+    /**
+     * 密钥草稿：翻页/缩放窗口都会重建全部控件，不在这里暂存的话，
+     * 玩家刚输入的密钥会被一个新空框静默顶掉（留空=不改动，等于白输）。
+     * 只活在本屏内存里，关闭即丢弃；不会写进快照，也不会出现在日志。
+     */
+    private String apiKeyDraft = "";
 
     public AiConfigScreen() {
         super(Component.translatable("ai.ai_assisted.gui.title"));
@@ -133,9 +140,8 @@ public class AiConfigScreen extends AiConfigFormScreen {
     }
 
     private AbstractWidget createApiKeyBox(int x, int y) {
-        // 密钥框永远从空开始：服务端从不回传密钥，因此不存在"初值"可填
-        EditBox box = boundBox(x, y, 256, "", text -> {
-        });
+        // 初值取草稿：控件重建（翻页/缩放）后玩家已输入的密钥不会丢
+        EditBox box = boundBox(x, y, 256, this.apiKeyDraft, text -> this.apiKeyDraft = text);
         // 掩码：按输入长度画等长的 *，屏幕上不出现密钥本体（防录屏/截图时顺手泄露）
         // 刻意不设 setHint：这一行下面是完整的灰字说明，输入框里再挂一条长提示会把框塞满
         box.setFormatter((text, offset) -> FormattedCharSequence.forward("*".repeat(text.length()), Style.EMPTY));

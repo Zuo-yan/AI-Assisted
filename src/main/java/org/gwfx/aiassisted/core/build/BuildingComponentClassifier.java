@@ -2,6 +2,7 @@ package org.gwfx.aiassisted.core.build;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -64,6 +65,11 @@ public final class BuildingComponentClassifier {
     private BuildingComponentClassifier() {
     }
 
+    /** 该方块 id 是否属于柱状材料（原木/木柱/栅栏）。参数须已小写化。 */
+    private static boolean isPillarBlock(String lowerId) {
+        return lowerId.contains("log") || lowerId.contains("wood") || lowerId.contains("pillar") || lowerId.contains("fence");
+    }
+
     /** 对给定的体素集合进行构件分类，返回 构件类型 → 该构件包含的体素列表。 */
     public static Map<ComponentType, List<Voxel>> classify(List<Voxel> voxels) {
         if (voxels == null || voxels.isEmpty()) {
@@ -84,18 +90,26 @@ public final class BuildingComponentClassifier {
 
         int height = Math.max(1, maxY - minY + 1);
 
-        // 识别立柱：同一 (x,z) 列上连续出现 2 个以上 log/wood/pillar/fence
+        // 识别立柱：同一 (x,z) 列上「纵向连续」出现 2 个以上 log/wood/pillar/fence
+        // （必须是相邻的方块；上下各一段原木、中间隔空或隔石头的"假柱"不算）
         for (Map.Entry<Long, List<Voxel>> entry : byColumn.entrySet()) {
-            List<Voxel> col = entry.getValue();
-            int logCount = 0;
+            List<Voxel> col = new ArrayList<>(entry.getValue());
+            col.sort(Comparator.comparingInt(Voxel::y));
+            int consecutive = 0;
+            Voxel prev = null;
             for (Voxel v : col) {
-                String id = v.blockId().toLowerCase(Locale.ROOT);
-                if (id.contains("log") || id.contains("wood") || id.contains("pillar") || id.contains("fence")) {
-                    logCount++;
+                boolean pillarBlock = isPillarBlock(v.blockId().toLowerCase(Locale.ROOT));
+                if (pillarBlock && prev != null && prev.y() + 1 == v.y()
+                        && isPillarBlock(prev.blockId().toLowerCase(Locale.ROOT))) {
+                    consecutive++;
+                } else {
+                    consecutive = pillarBlock ? 1 : 0;
                 }
-            }
-            if (logCount >= 2) {
-                columnPillars.add(entry.getKey());
+                prev = v;
+                if (consecutive >= 2) {
+                    columnPillars.add(entry.getKey());
+                    break;
+                }
             }
         }
 
@@ -116,8 +130,7 @@ public final class BuildingComponentClassifier {
                 result.get(ComponentType.DECORATION).add(v);
             } else if ((id.contains("stairs") || id.contains("slab")) && relY >= 0.35) {
                 result.get(ComponentType.ROOF).add(v);
-            } else if (columnPillars.contains(colKey)
-                    && (id.contains("log") || id.contains("wood") || id.contains("pillar") || id.contains("fence"))) {
+            } else if (columnPillars.contains(colKey) && isPillarBlock(id)) {
                 result.get(ComponentType.PILLAR).add(v);
             } else if (v.y == minY && !id.contains("air")) {
                 result.get(ComponentType.FLOOR).add(v);

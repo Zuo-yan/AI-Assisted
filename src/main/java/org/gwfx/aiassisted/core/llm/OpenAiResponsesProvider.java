@@ -220,8 +220,9 @@ public final class OpenAiResponsesProvider implements LlmProvider {
 
         int promptTokens = UNKNOWN_TOKENS;
         int completionTokens = UNKNOWN_TOKENS;
-        JsonObject usage = root.getAsJsonObject("usage");
-        if (usage != null) {
+        JsonElement usageElement = root.get("usage");
+        if (usageElement != null && usageElement.isJsonObject()) {
+            JsonObject usage = usageElement.getAsJsonObject();
             promptTokens = asInt(usage.get("input_tokens"), UNKNOWN_TOKENS);
             completionTokens = asInt(usage.get("output_tokens"), UNKNOWN_TOKENS);
         }
@@ -266,19 +267,23 @@ public final class OpenAiResponsesProvider implements LlmProvider {
             return "tool_calls";
         }
         if ("incomplete".equals(asNullableString(root.get("status")))) {
-            JsonObject details = root.getAsJsonObject("incomplete_details");
-            if (details != null && "max_output_tokens".equals(asString(details.get("reason")))) {
-                return "length";
+            JsonElement detailsElement = root.get("incomplete_details");
+            if (detailsElement != null && detailsElement.isJsonObject()) {
+                JsonObject details = detailsElement.getAsJsonObject();
+                if ("max_output_tokens".equals(asString(details.get("reason")))) {
+                    return "length";
+                }
             }
         }
         return "stop";
     }
 
     private static String errorMessageOf(JsonObject root) {
-        JsonObject error = root.getAsJsonObject("error");
-        if (error == null) {
+        JsonElement errorElement = root.get("error");
+        if (errorElement == null || !errorElement.isJsonObject()) {
             return "";
         }
+        JsonObject error = errorElement.getAsJsonObject();
         String message = asString(error.get("message"));
         return message.isEmpty() ? "" : "：" + message;
     }

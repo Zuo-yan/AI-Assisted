@@ -24,7 +24,7 @@ public final class CoveragePlanner {
      * 检查结果。
      *
      * @param checkedBlocks 实际需要改动、因而被检查过的格子数
-     * @param conflicts     其中被判为普通"人工方块/不可覆盖"的格子数
+     * @param conflicts     其中被判为普通"人工方块/不可覆盖"的格子数（检查到第一处冲突即返回，故只会是 0 或 1）
      * @param unloadedChunk 是否存在未加载区块（true 时 firstViolation 里带的是触发的那个坐标）
      */
     public record Result(int checkedBlocks, int conflicts, boolean unloadedChunk, Violation firstViolation) {
@@ -46,13 +46,12 @@ public final class CoveragePlanner {
             return new Result(0, 0, false, null);
         }
         int checked = 0;
-        int conflicts = 0;
 
         for (BuildPlan.LocalBlock block : plan.blocks()) {
             BuildPlacement.Position position = placement.toWorld(block.x(), block.y(), block.z());
             if (!probe.isLoaded(position.x(), position.y(), position.z())) {
                 // 一遇到未加载就停：继续检查要么会强制加载区块，要么会漏检
-                return new Result(checked, conflicts, true,
+                return new Result(checked, 0, true,
                         new Violation(position.x(), position.y(), position.z(), block.blockId(), null));
             }
             String current = probe.currentBlockId(position.x(), position.y(), position.z());
@@ -64,21 +63,16 @@ public final class CoveragePlanner {
             if (allowNonNatural) {
                 // 放权模式：允许修改普通人造建筑和自然地形，但仍严格阻断对不可破坏/违规方块（基岩、末地传送门等）的破坏
                 if (current != null && BlueprintValidator.FORBIDDEN_BLOCKS.contains(current)) {
-                    conflicts++;
-                    if (conflicts == 1) {
-                        return new Result(checked, conflicts, false,
-                                new Violation(position.x(), position.y(), position.z(), block.blockId(), current));
-                    }
-                }
-            } else if (!probe.isNaturalTerrain(position.x(), position.y(), position.z())) {
-                conflicts++;
-                if (conflicts == 1) {
-                    // 只留第一处：报错只需要一个坐标，玩家据此去挖开那块地
-                    return new Result(checked, conflicts, false,
+                    // 发现第一处即返回：这也是 conflicts 恒为 0 或 1 的原因
+                    return new Result(checked, 1, false,
                             new Violation(position.x(), position.y(), position.z(), block.blockId(), current));
                 }
+            } else if (!probe.isNaturalTerrain(position.x(), position.y(), position.z())) {
+                // 只留第一处：报错只需要一个坐标，玩家据此去挖开那块地
+                return new Result(checked, 1, false,
+                        new Violation(position.x(), position.y(), position.z(), block.blockId(), current));
             }
         }
-        return new Result(checked, conflicts, false, null);
+        return new Result(checked, 0, false, null);
     }
 }

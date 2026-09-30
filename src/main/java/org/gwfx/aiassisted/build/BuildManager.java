@@ -145,20 +145,15 @@ public final class BuildManager {
         }
         UndoStore.Record<BlockState> found = record.get();
         ServerLevel level = (ServerLevel) player.level();
+        // 恢复要从新到旧（先拆最后放的）：UndoLog.reversed() 已经是倒序副本，
+        // 这里绝不能再倒一次 —— 二次反转会退回成"放置顺序"，与设计相反
         Job job = new Job(player.getUUID(), level, true, found.name(), null,
-                List.of(), reverseForRestore(found.log().reversed()), Map.of());
+                List.of(), found.log().reversed(), Map.of());
         this.jobs.put(player.getUUID(), job);
 
         LOGGER.info("[AI][建造] {} 开始撤销「{}」：{} 格", player.getGameProfile().getName(),
                 job.name, job.total());
         return Component.translatable("ai.ai_assisted.build.undo_started", job.name, job.total());
-    }
-
-    /** 1.20.1 目标是 Java 17：没有 {@code List#reversed()}，显式倒序拷贝（恢复要从新到旧）。 */
-    private static <T> List<T> reverseForRestore(List<T> list) {
-        List<T> copy = new ArrayList<>(list);
-        java.util.Collections.reverse(copy);
-        return copy;
     }
 
     /**

@@ -15,6 +15,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -176,11 +177,12 @@ public final class MemoryStore {
     }
 
     private static boolean matchesQuery(Entry entry, String query) {
-        String keyword = query == null ? "" : query.strip().toLowerCase();
+        // Locale.ROOT：土耳其等 locale 下 'I'.toLowerCase() 会变成 'ı'，匹配会莫名失败
+        String keyword = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
         if (keyword.isEmpty()) {
             return true;
         }
-        return entry.text().toLowerCase().contains(keyword);
+        return entry.text().toLowerCase(Locale.ROOT).contains(keyword);
     }
 
     // ===== 注入提示词 =====
@@ -247,24 +249,25 @@ public final class MemoryStore {
                 return file;
             }
             JsonObject root = parsed.getAsJsonObject();
-            file.nextId = root.get("nextId").getAsLong();
+            file.nextId = asLong(root.get("nextId"), 0L);
             file.name = asText(root.get("name"));
-            JsonArray entries = root.getAsJsonArray("entries");
-            if (entries != null) {
+            JsonElement entriesElement = root.get("entries");
+            if (entriesElement != null && entriesElement.isJsonArray()) {
+                JsonArray entries = entriesElement.getAsJsonArray();
                 for (JsonElement element : entries) {
                     if (element == null || !element.isJsonObject()) {
                         continue;
                     }
                     JsonObject item = element.getAsJsonObject();
                     // 逐字段宽容读取：单条损坏跳过那一条，不弃整个文件
-                    long id = item.get("id").getAsLong();
+                    long id = asLong(item.get("id"), -1L);
                     String text = asText(item.get("text"));
-                    if (text.isEmpty()) {
+                    if (id < 0 || text.isEmpty()) {
                         continue;
                     }
                     file.entries.add(new Entry(id, text,
-                            item.get("createdAt").getAsLong(),
-                            item.get("updatedAt").getAsLong()));
+                            asLong(item.get("createdAt"), 0L),
+                            asLong(item.get("updatedAt"), 0L)));
                     file.nextId = Math.max(file.nextId, id + 1);
                 }
             }
@@ -280,6 +283,18 @@ public final class MemoryStore {
             return "";
         }
         return element.getAsString();
+    }
+
+    /** 宽容读一个 long：字段缺失、类型不对或不是数字时返回兜底值（绝不因单条损坏抛异常）。 */
+    private static long asLong(JsonElement element, long fallback) {
+        if (element == null || element.isJsonNull() || !element.isJsonPrimitive()) {
+            return fallback;
+        }
+        try {
+            return element.getAsLong();
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private void save(UUID player, PlayerMemory file) {

@@ -2,6 +2,7 @@ package org.gwfx.aiassisted.voice;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.gwfx.aiassisted.AiRuntime;
 import org.gwfx.aiassisted.command.AiConfirmHandler;
@@ -86,6 +87,8 @@ public final class ServerVoiceService {
         player.sendSystemMessage(Component.translatable("ai.ai_assisted.voice.transcribing"));
 
         String effectiveUrl = config.baseUrl();
+        // 回调跑在传输线程：server 必须在异步发起前捕获，回调里只允许 server.execute，绝不碰世界
+        MinecraftServer server = player.level().getServer();
         runtime.voiceClient().transcribe(
                 audioData,
                 effectiveUrl,
@@ -93,8 +96,8 @@ public final class ServerVoiceService {
                 apiKey,
                 config.timeout()
         ).whenComplete((text, error) -> {
-            if (player.level().getServer() != null) {
-                player.level().getServer().execute(() -> {
+            if (server != null) {
+                server.execute(() -> {
                     if (player.hasDisconnected()) {
                         return;
                     }
