@@ -19,6 +19,7 @@ import org.gwfx.aiassisted.core.http.HttpTransport;
 import org.gwfx.aiassisted.core.http.JdkHttpTransport;
 import org.gwfx.aiassisted.core.llm.LlmProvider;
 import org.gwfx.aiassisted.core.llm.ProviderRegistry;
+import org.gwfx.aiassisted.core.memory.MemoryStore;
 import org.gwfx.aiassisted.core.text.KeyRedactor;
 import org.gwfx.aiassisted.secret.KeyStore;
 import org.gwfx.aiassisted.tool.RecipeIndex;
@@ -96,6 +97,14 @@ public final class AiRuntime {
      * 全量枚举一遍配方，代价白付。
      */
     private final RecipeIndex recipeIndex = new RecipeIndex();
+    /**
+     * 每玩家的长期记忆（T001-8，落盘到 config/zuoyanmod/memory/）。
+     *
+     * <p>与上面几个仅内存的 Store 刻意不同：记忆的全部价值就在于跨会话，
+     * 所以它常驻 {@code AiRuntime}、<b>不参与 onPlayerLeave 清理</b>。
+     */
+    private final MemoryStore memories = new MemoryStore(
+            FMLPaths.CONFIGDIR.get().resolve("zuoyanmod").resolve("memory"));
     private final AiChatService chatService;
 
     private volatile AiConfig config;
@@ -117,7 +126,7 @@ public final class AiRuntime {
         this.chatService = new AiChatService(
                 this.redactor, this.keyStore, this.collector, this.sessions, this.dispatcher,
                 this.goals, this.recipeIndex, this.pendingCommands, this.lastCommands,
-                this.pendingBuilds, this.config, this.provider);
+                this.pendingBuilds, this.memories, this.config, this.provider);
 
         LOGGER.info("[AI] 初始化完成：provider={}（配置值 '{}'），model={}",
                 this.provider.id(), this.config.provider(),
@@ -126,6 +135,10 @@ public final class AiRuntime {
 
     public AiConfig config() {
         return this.config;
+    }
+
+    public MemoryStore memories() {
+        return this.memories;
     }
 
     public KeyStore keyStore() {
@@ -231,6 +244,11 @@ public final class AiRuntime {
         this.pendingBuilds.clear(playerId);
     }
 
+    /** 玩家进服时的主动问候（管线在 {@code AiChatService#greetOnJoin}；守卫不满足时静默跳过）。 */
+    public void greetOnJoin(ServerPlayer player) {
+        this.chatService.greetOnJoin(player);
+    }
+
     /** 待确认的建造方案（{@code /ai confirm} 的建造分支）。 */
     public PendingBuildStore pendingBuilds() {
         return this.pendingBuilds;
@@ -314,7 +332,12 @@ public final class AiRuntime {
                 Config.aiBuildEnabled,
                 Config.aiBuildAllowNonNaturalTerrain,
                 Config.aiBuildMaxBlocks,
-                Config.aiBuildBlocksPerTick);
+                Config.aiBuildBlocksPerTick,
+                Config.aiMemoryEnabled,
+                Config.aiMemoryMaxEntries,
+                Config.aiMemoryInjectCount,
+                Config.aiGreetingEnabled,
+                Config.aiGreetingCooldownSeconds);
     }
 
     private LlmProvider createProvider(ProviderRegistry registry, AiConfig currentConfig) {

@@ -16,6 +16,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -82,7 +83,7 @@ public final class JdkHttpTransport implements HttpTransport {
                     .thenApply(response -> new HttpResponseData(response.statusCode(), response.body()));
         } catch (RuntimeException e) {
             // sendAsync 同步抛出（例如 header 非法）时不会有 future，直接转成失败结果
-            return CompletableFuture.failedFuture(new LlmException("HTTP 请求构造失败：" + messageOf(e), e));
+            return CompletableFuture.failedFuture(constructionFailure(e));
         }
 
         return call.handle((data, error) -> {
@@ -119,6 +120,9 @@ public final class JdkHttpTransport implements HttpTransport {
         if (cause instanceof LlmException llm) {
             return llm;
         }
+        if (cause instanceof RejectedExecutionException) {
+            return rejectedPool(cause);
+        }
         if (cause instanceof HttpTimeoutException) {
             return new LlmException("请求超时", cause);
         }
@@ -126,6 +130,25 @@ public final class JdkHttpTransport implements HttpTransport {
             return new LlmException("网络请求失败：" + messageOf(cause), cause);
         }
         return new LlmException("请求失败：" + messageOf(cause), cause);
+    }
+
+    /**
+     * 线程池被 {@link #close()}（随上一个世界停机）后又复用了旧传输层。
+     *
+     * <p>AiRuntime 会在服务器启动时重建传输层，正常流程不会走到这里；真出现了
+     * 也给一句可操作的指引，而不是甩一段 "Task CompletableFuture$AsyncSupply@6c0
+     * rejected from ThreadPoolExecutor" 这种没人看得懂的原始消息。
+     */
+    private static LlmException rejectedPool(Throwable cause) {
+        return new LlmException(
+                "HTTP 线程池已关闭，无法发送请求（常见于刚退出上一个世界后复用旧连接）。重进世界或重启游戏即可恢复", cause);
+    }
+
+    private static LlmException constructionFailure(Throwable error) {
+        if (unwrap(error) instanceof RejectedExecutionException) {
+            return rejectedPool(error);
+        }
+        return new LlmException("HTTP 请求构造失败：" + messageOf(error), error);
     }
 
     private static Throwable unwrap(Throwable error) {

@@ -7,6 +7,7 @@ import org.gwfx.aiassisted.build.PendingBuildStore;
 import org.gwfx.aiassisted.chat.PendingCommandStore;
 import org.gwfx.aiassisted.core.agent.ToolRegistry;
 import org.gwfx.aiassisted.core.config.AiConfig;
+import org.gwfx.aiassisted.core.memory.MemoryStore;
 
 /**
  * 工具注册入口。
@@ -34,7 +35,8 @@ public final class AiTools {
     public static ToolRegistry registryFor(ServerPlayer player, AiConfig config,
                                            RecipeIndex recipeIndex,
                                            PendingCommandStore pendingCommands,
-                                           PendingBuildStore pendingBuilds) {
+                                           PendingBuildStore pendingBuilds,
+                                           MemoryStore memories) {
         ToolRegistry registry = new ToolRegistry();
         registry.register(SearchBlocksTool.spec(), args -> SearchBlocksTool.invoke(player, config, args));
         registry.register(SearchEntitiesTool.spec(), args -> SearchEntitiesTool.invoke(player, config, args));
@@ -43,6 +45,18 @@ public final class AiTools {
         registry.register(PlayerStatusTool.spec(), args -> PlayerStatusTool.invoke(player, config, args));
         registry.register(SearchInventoryTool.spec(), args -> SearchInventoryTool.invoke(player, config, args));
         registry.register(SearchContainersTool.spec(), args -> SearchContainersTool.invoke(player, config, args));
+
+        // ===== 长期记忆三件套（T001-8）=====
+        // 只读写发起对话玩家自己的记忆文件，不碰世界与指令 —— 不设等级门槛，全员可用。
+        // 总开关关闭时整组不注册：模型看不到工具名，也就不会承诺「我会记住」。
+        if (config.memoryEnabled()) {
+            registry.register(MemoryTools.writeSpec(),
+                    args -> MemoryTools.invokeWrite(player, memories, config, args));
+            registry.register(MemoryTools.searchSpec(),
+                    args -> MemoryTools.invokeSearch(player, memories, config, args));
+            registry.register(MemoryTools.forgetSpec(),
+                    args -> MemoryTools.invokeForget(player, memories, config, args));
+        }
 
         // ===== 管理员级工具（T002）：达不到门槛就**不注册** =====
         // 为什么不是"注册了再在实现里拒绝"：不注册意味着模型连工具名都看不到，

@@ -84,12 +84,16 @@ public record AiTestConnectionPacket(String json) {
                     baseUrl, apiKey, Duration.ofSeconds(10), 0);
             LlmProvider testProvider = registry.create(provider, settings);
 
+            // 这是连通性测试，不是正式对话，参数按「最容易被各家接受」取：
+            // temperature 给 1.0（默认值）—— 0.0 会被推理系模型（o 系 / gpt-5 系）整单拒收；
+            // 上限给 32 —— 太小（如 5）低于 Responses 协议 max_output_tokens 的下限 16，
+            // 还没走到网络那一步就 400 了，中转站玩家会误以为「接不上」
             ChatRequest testRequest = new ChatRequest(
                     model,
                     "",
                     List.of(ChatMessage.user("ping")),
-                    0.0D,
-                    5
+                    1.0D,
+                    32
             );
 
             long startTime = System.currentTimeMillis();

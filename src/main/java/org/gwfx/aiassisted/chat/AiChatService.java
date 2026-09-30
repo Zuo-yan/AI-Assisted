@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stats;
 import org.gwfx.aiassisted.context.McContextCollector;
 import org.gwfx.aiassisted.build.PendingBuildStore;
 import org.gwfx.aiassisted.core.agent.AgentLoop;
@@ -13,11 +14,14 @@ import org.gwfx.aiassisted.core.config.AiConfig;
 import org.gwfx.aiassisted.core.context.ChatHistory;
 import org.gwfx.aiassisted.core.context.ContextRenderer;
 import org.gwfx.aiassisted.core.context.ContextSnapshot;
+import org.gwfx.aiassisted.core.greeting.GreetingPrompts;
 import org.gwfx.aiassisted.core.llm.ChatMessage;
 import org.gwfx.aiassisted.core.llm.ChatRequest;
+import org.gwfx.aiassisted.core.llm.ChatResponse;
 import org.gwfx.aiassisted.core.llm.LlmException;
 import org.gwfx.aiassisted.core.llm.LlmProvider;
 import org.gwfx.aiassisted.core.llm.ToolCall;
+import org.gwfx.aiassisted.core.memory.MemoryStore;
 import org.gwfx.aiassisted.core.text.KeyRedactor;
 import org.gwfx.aiassisted.core.text.TextPager;
 import org.gwfx.aiassisted.secret.KeyStore;
@@ -29,6 +33,7 @@ import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -75,9 +80,13 @@ public final class AiChatService {
     private final LastCommandStore lastCommands;
     /** 待确认的建造方案（T001-6，仅内存）。 */
     private final PendingBuildStore pendingBuilds;
+    /** 每玩家的长期记忆（T001-8，落盘）。由 AiRuntime 常驻持有并传入。 */
+    private final MemoryStore memories;
 
     private final AtomicInteger inFlight = new AtomicInteger();
     private final Map<UUID, Long> lastRequestAt = new ConcurrentHashMap<>();
+    /** 每玩家最近一次进服问候的时间戳（冷却防重连刷问候；仅内存，重启即重置无妨）。 */
+    private final Map<UUID, Long> lastGreetAt = new ConcurrentHashMap<>();
 
     private volatile AiConfig config;
     private volatile LlmProvider provider;
@@ -92,6 +101,7 @@ public final class AiChatService {
                          PendingCommandStore pendingCommands,
                          LastCommandStore lastCommands,
                          PendingBuildStore pendingBuilds,
+                         MemoryStore memories,
                          AiConfig config,
                          LlmProvider provider) {
         this.redactor = redactor;
@@ -104,6 +114,7 @@ public final class AiChatService {
         this.pendingCommands = pendingCommands;
         this.lastCommands = lastCommands;
         this.pendingBuilds = pendingBuilds;
+        this.memories = memories;
         this.config = config;
         this.provider = provider;
     }
@@ -121,6 +132,11 @@ public final class AiChatService {
     /** 待确认的建造方案（{@code /ai confirm} 的建造分支用）。 */
     public PendingBuildStore pendingBuilds() {
         return this.pendingBuilds;
+    }
+
+    /** 每玩家的长期记忆（{@code /ai memory} 用）。 */
+    public MemoryStore memories() {
+        return this.memories;
     }
 
     /** 配置热重载：换快照与 Provider 实例，并让已有会话按新上限重新裁剪。 */
@@ -204,17 +220,27 @@ public final class AiChatService {
         // 工具注册表绑定到「发起命令的这个玩家」，所以每次请求现建，不能全局复用。
         // 关闭开关时用空注册表 —— 它的 specs() 为空，请求体里不会出现 tools 字段。
         // 管理员级工具还会按调用者等级（与危险级开关）二次裁剪，见 AiTools.registryFor。
-        // 配方索引相反：它是跨请求复用才有意义的缓存，由 AiRuntime 常驻持有、传进来。
+        // 配方索引与记忆库相反：它们是跨请求复用才有意义的状态，由 AiRuntime 常驻持有、传进来。
         ToolRegistry tools = currentConfig.toolCallingEnabled()
                 ? AiTools.registryFor(player, currentConfig, this.recipeIndex,
-                        this.pendingCommands, this.pendingBuilds)
+                        this.pendingCommands, this.pendingBuilds, this.memories)
                 : ToolRegistry.empty();
+
+        // 记忆读取在主线程完成（首次访问涉及一次读盘），与上下文采集同一段。
+        // 玩家名字是记忆文件的元数据：每次对话顺手刷新，模型才知道「在跟谁说话」
+        String memoryBlock;
+        if (currentConfig.memoryEnabled()) {
+            this.memories.rememberName(player.getUUID(), player.getGameProfile().getName());
+            memoryBlock = this.memories.renderForPrompt(player.getUUID(), currentConfig);
+        } else {
+            memoryBlock = "";
+        }
 
         List<ChatMessage> messages = new ArrayList<>(history.messages());
         messages.add(ChatMessage.user(text));
         ChatRequest request = new ChatRequest(
                 currentConfig.model(),
-                buildSystemPrompt(currentConfig, snapshot, this.goals.goalOf(player.getUUID())),
+                buildSystemPrompt(currentConfig, snapshot, this.goals.goalOf(player.getUUID()), memoryBlock),
                 messages,
                 currentConfig.temperature(),
                 currentConfig.maxTokens(),
@@ -264,18 +290,142 @@ public final class AiChatService {
     }
 
     /**
-     * 系统提示词 = 用户配置的提示词 + 事实来源规则 + （可选的）任务目标块 + 上下文数据块。
+     * 玩家进服时的主动问候（「主动性」第一刀）。
+     *
+     * <p><b>为什么不是一次普通 {@link #request} </b>：问候是服务端发起的单次主动行为，
+     * 不是一轮对话 —— 合成的驱动消息不该写进玩家的对话历史，回复不该分页排进同一队列，
+     * 也不该消耗玩家的聊天冷却。所以这里走一条独立的轻量管线：
+     * 主线程采集事实 → 单次 LLM 调用（无工具）→ 回主线程只发给该玩家。
+     *
+     * <p><b>所有前置不满足时静默返回</b>：这是主动行为，失败与跳过都不该打扰玩家
+     * （报错只会让人莫名其妙）。冷却防止反复重连刷问候刷用户的 API 额度。
+     * 必须在服务端主线程调用（{@code PlayerLoggedInEvent}）。
+     */
+    public void greetOnJoin(ServerPlayer player) {
+        AiConfig currentConfig = this.config;
+        // 对玩家静默，但对服务端日志要透明：跳过原因必须留痕（配置缺失这类问题
+        // 否则只能靠猜 —— 曾有"为什么没问候"排查半天，结果是模型字段被清空了）
+        String skip = null;
+        if (!currentConfig.greetingEnabled()) {
+            skip = "功能未开启（ai.greeting.enabled）";
+        } else if (!currentConfig.enabled()) {
+            skip = "AI 总开关未开启";
+        } else if (!currentConfig.hasModel()) {
+            skip = "模型未配置";
+        } else if (currentConfig.requiresApiKey() && this.keyStore.resolved().isEmpty()) {
+            skip = "密钥未配置";
+        } else if (this.inFlight.get() >= currentConfig.maxConcurrentRequests()) {
+            skip = "并发已满";
+        }
+        if (skip != null) {
+            LOGGER.info("[AI] 进服问候跳过：{}（玩家 {}）", skip, player.getGameProfile().getName());
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long last = this.lastGreetAt.get(player.getUUID());
+        if (last != null && now - last < currentConfig.greetingCooldownSeconds() * 1000L) {
+            LOGGER.debug("[AI] 进服问候跳过：冷却中（玩家 {}）", player.getGameProfile().getName());
+            return;
+        }
+        MinecraftServer server = player.level().getServer();
+        if (server == null) {
+            return;
+        }
+
+        this.lastGreetAt.put(player.getUUID(), now);
+        this.inFlight.incrementAndGet();
+
+        // 事实采集与记忆读取都在主线程（与 request() 的采集段同一条铁律）
+        List<String> facts = collectGreetingFacts(player, server);
+        String memoryBlock = currentConfig.memoryEnabled()
+                ? this.memories.renderForPrompt(player.getUUID(), currentConfig)
+                : "";
+        ChatRequest request = new ChatRequest(
+                currentConfig.model(),
+                GreetingPrompts.buildSystemPrompt(currentConfig,
+                        GreetingPrompts.buildFactsBlock(facts), memoryBlock),
+                List.of(ChatMessage.user(GreetingPrompts.userInstruction())),
+                currentConfig.temperature(),
+                currentConfig.maxTokens(),
+                List.of());
+
+        LlmProvider currentProvider = this.provider;
+        CompletableFuture<ChatResponse> future;
+        try {
+            future = currentProvider.chat(request);
+        } catch (RuntimeException e) {
+            // 同步抛出（baseUrl 非法等）不会有 future，必须还回并发名额
+            this.inFlight.decrementAndGet();
+            LOGGER.debug("[AI] 进服问候发起失败：{}", e.toString());
+            return;
+        }
+        future.whenComplete((response, error) ->
+                server.execute(() -> finishGreeting(player, currentConfig, response, error)));
+    }
+
+    /** 问候的事实行（主线程采集）。刻意精选：只报"一句话概况"用得上的，不倒全服家底。 */
+    private List<String> collectGreetingFacts(ServerPlayer player, MinecraftServer server) {
+        List<String> lines = new ArrayList<>();
+        lines.add("玩家名: " + player.getGameProfile().getName());
+        lines.add("游玩总时长: " + GreetingPrompts.humanizePlaytime(
+                player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME))));
+        lines.add("历史死亡次数: " + player.getStats().getValue(Stats.CUSTOM.get(Stats.DEATHS)));
+        lines.add("当前在线人数: " + server.getPlayerCount());
+        double mspt = server.getAverageTickTime();
+        double tps = mspt <= 50.0D ? 20.0D : Math.min(20.0D, 1000.0D / mspt);
+        lines.add(String.format(Locale.ROOT, "服务器负载: 平均 %.1f ms/tick（约 %.1f TPS）", mspt, tps));
+        lines.add("服务器已连续运行: " + GreetingPrompts.humanizePlaytime(server.getTickCount()));
+        lines.add("游戏内天数: 第 " + (server.overworld().getDayTime() / 24000L + 1L) + " 天");
+        return lines;
+    }
+
+    /** 问候收尾（已在主线程）。失败与空回复一律静默 —— 主动行为不该打扰玩家。 */
+    private void finishGreeting(ServerPlayer player, AiConfig config, ChatResponse response, Throwable error) {
+        this.inFlight.decrementAndGet();
+        if (error != null) {
+            LOGGER.debug("[AI] 进服问候失败：{}", describeError(error).getString(), error);
+            return;
+        }
+        if (response == null) {
+            return;
+        }
+        String reply = response.text().strip();
+        if (reply.isEmpty()) {
+            LOGGER.debug("[AI] 进服问候空回复：finish_reason={}", response.finishReason());
+            return;
+        }
+        List<Component> components = new ArrayList<>();
+        List<String> pages = TextPager.paginate(reply, config.replyChunkSize());
+        for (int i = 0; i < pages.size(); i++) {
+            components.add(i == 0
+                    ? Component.translatable("ai.ai_assisted.reply_prefix").append(pages.get(i))
+                    : Component.literal(pages.get(i)));
+        }
+        this.dispatcher.enqueue(player, components, config.replyIntervalTicks());
+    }
+
+    /**
+     * 系统提示词 = 用户配置的提示词 + 事实来源规则 + （可选的）任务目标块 + 上下文数据块
+     * + （可选的）长期记忆块。
      *
      * <p>目标块由 {@link ContextRenderer} 自己拼在 {@code <context>} <b>之前</b>：
      * 它是「引导行为」的，不能和「只是数据」的事实混在一个块里（理由见 ContextRenderer 的注释）。
+     * 记忆块拼在 {@code <context>} <b>之后</b>：它同样承载行为引导（何时该记、何时该忘），
+     * 且同样是「每玩家私有数据」，单独成块 + 配自己的规则最清晰。
      */
-    private static String buildSystemPrompt(AiConfig config, ContextSnapshot snapshot, String goal) {
-        StringBuilder prompt = new StringBuilder(config.systemPrompt().length() + 1200);
+    private static String buildSystemPrompt(AiConfig config, ContextSnapshot snapshot, String goal, String memoryBlock) {
+        StringBuilder prompt = new StringBuilder(config.systemPrompt().length() + 2400);
         if (!config.systemPrompt().isBlank()) {
             prompt.append(config.systemPrompt()).append("\n\n");
         }
+        // 模型自我认知：配置的模型名/协议就是它的身份，防止它凭训练记忆自称别家模型
+        prompt.append(ContextRenderer.identityStatement(config)).append("\n\n");
         prompt.append(ContextRenderer.contextRule()).append("\n\n");
         prompt.append(ContextRenderer.render(snapshot, goal));
+        if (memoryBlock != null && !memoryBlock.isEmpty()) {
+            prompt.append("\n\n").append(ContextRenderer.memoryRule()).append("\n\n");
+            prompt.append(memoryBlock);
+        }
         return prompt.toString();
     }
 

@@ -137,8 +137,7 @@ public final class OpenAiCompatibleProvider implements LlmProvider {
     /** 解析响应。非 2xx 抛 {@link LlmException}（带状态码），格式错误也抛同类异常。 */
     static ChatResponse parseResponse(HttpResponseData response) {
         if (!response.isSuccess()) {
-            throw LlmException.http(response.statusCode(),
-                    "HTTP " + response.statusCode() + snippetOf(response.body()));
+            throw HttpErrors.fromResponse(response);
         }
 
         JsonObject root;

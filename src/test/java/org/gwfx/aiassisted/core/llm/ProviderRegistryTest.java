@@ -25,6 +25,8 @@ class ProviderRegistryTest {
     void recognizesKnownIdsCaseInsensitively() {
         assertTrue(ProviderRegistry.isKnown("openai-compatible"));
         assertTrue(ProviderRegistry.isKnown("  OpenAI-Compatible  "));
+        assertTrue(ProviderRegistry.isKnown("openai-responses"));
+        assertTrue(ProviderRegistry.isKnown("  OpenAI-Responses  "));
         assertTrue(ProviderRegistry.isKnown("anthropic"));
         assertTrue(ProviderRegistry.isKnown("  Anthropic  "));
         assertFalse(ProviderRegistry.isKnown("mock"));
@@ -44,7 +46,8 @@ class ProviderRegistryTest {
 
     @Test
     void knownIdsAreStableAndComplete() {
-        assertEquals(java.util.List.of("openai-compatible", "anthropic"), ProviderRegistry.knownIds());
+        assertEquals(java.util.List.of("openai-compatible", "openai-responses", "anthropic"),
+                ProviderRegistry.knownIds());
         for (String id : ProviderRegistry.knownIds()) {
             assertTrue(ProviderRegistry.isKnown(id), id + " 应被 isKnown 认可");
         }
@@ -56,6 +59,7 @@ class ProviderRegistryTest {
 
         assertInstanceOf(OpenAiCompatibleProvider.class, registry.create("gemini", settings()));
         assertInstanceOf(OpenAiCompatibleProvider.class, registry.create("openai-compatible", settings()));
+        assertInstanceOf(OpenAiResponsesProvider.class, registry.create("openai-responses", settings()));
         assertInstanceOf(AnthropicProvider.class, registry.create("anthropic", settings()));
     }
 }

@@ -72,7 +72,27 @@ public record AiConfig(
         /** 单次建造体积上限（包围盒格子数）。 */
         int buildMaxBlocks,
         /** 每 tick 放置预算。 */
-        int buildBlocksPerTick) {
+        int buildBlocksPerTick,
+        /**
+         * AI 长期记忆总开关（T001-8，默认 true）。
+         *
+         * <p>关闭时 memory_* 三工具不注册、不注入、不落盘 —— 模型看不到工具名，
+         * 也就不会承诺「我会记住」。已存在的记忆文件保留不删。
+         */
+        boolean memoryEnabled,
+        /** 单玩家记忆条数上限，超出挤掉最旧的（10~500）。 */
+        int memoryMaxEntries,
+        /** 每轮注入系统提示词的最近记忆条数（0~50，0=只存不注入）。 */
+        int memoryInjectCount,
+        /**
+         * 进服问候总开关（默认 true）。
+         *
+         * <p>开启后玩家加入服务器时，AI 会主动发一次简短问候（只发给该玩家）：
+         * 叫名字 + 结合服务端刚采集的数据做一句话概况。每次问候 = 1 次 LLM 调用。
+         */
+        boolean greetingEnabled,
+        /** 同一玩家两次进服问候的最小间隔（秒，0~86400），防反复重连刷问候。 */
+        int greetingCooldownSeconds) {
 
     public static final Duration MIN_TIMEOUT = Duration.ofSeconds(1);
     public static final Duration MAX_TIMEOUT = Duration.ofMinutes(10);
@@ -135,6 +155,13 @@ public record AiConfig(
         // dangerousToolsEnabled / buildEnabled 是玩家自己拍的板，AiConfig 只如实传递
         buildMaxBlocks = clamp(buildMaxBlocks, 1, 32768);
         buildBlocksPerTick = clamp(buildBlocksPerTick, 1, 512);
+
+        // 记忆条数给下界 10：上限低于 10 条记忆功能就没意义了，不如让人直接关总开关
+        memoryMaxEntries = clamp(memoryMaxEntries, 10, 500);
+        memoryInjectCount = clamp(memoryInjectCount, 0, 50);
+
+        // 问候冷却 0 是合法值（每次进服都问候）；上限一天，再长就没有"冷却"的意义了
+        greetingCooldownSeconds = clamp(greetingCooldownSeconds, 0, 86400);
     }
 
     /**
@@ -162,7 +189,7 @@ public record AiConfig(
         return !model.isEmpty();
     }
 
-    /** 去空白、去末尾斜杠。空输入保持为空，交由调用方判断。 */
+    /** 去空白、去末尾斜杠；粘成完整端点的（带 /chat/completions 后缀）也一并剥掉。空输入保持为空，交由调用方判断。 */
     public static String normalizeBaseUrl(String url) {
         if (url == null) {
             return "";
@@ -170,6 +197,11 @@ public record AiConfig(
         String trimmed = url.strip();
         while (trimmed.endsWith("/")) {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        // 玩家常把文档里的完整端点整个粘进来：不剥掉后缀会拼出
+        // .../chat/completions/chat/completions，404 还看不出原因
+        if (trimmed.endsWith("/chat/completions")) {
+            trimmed = trimmed.substring(0, trimmed.length() - "/chat/completions".length());
         }
         return trimmed;
     }

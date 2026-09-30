@@ -21,9 +21,11 @@ import org.gwfx.aiassisted.core.config.AiConfig;
 import org.gwfx.aiassisted.core.context.ContextRenderer;
 import org.gwfx.aiassisted.core.context.ContextSnapshot;
 import org.gwfx.aiassisted.core.llm.ProviderRegistry;
+import org.gwfx.aiassisted.core.memory.MemoryStore;
 import org.gwfx.aiassisted.secret.KeyStore;
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -93,6 +95,12 @@ public final class AiCommand {
                                 .executes(AiCommand::showGoal))
                         .then(Commands.literal("clear")
                                 .executes(AiCommand::clearGoal)))
+                .then(Commands.literal("memory")
+                        .executes(AiCommand::showMemory)
+                        .then(Commands.literal("show")
+                                .executes(AiCommand::showMemory))
+                        .then(Commands.literal("clear")
+                                .executes(AiCommand::clearMemory)))
                 .then(Commands.literal("help")
                         .executes(AiCommand::help))
                 .then(Commands.literal("status")
@@ -193,12 +201,65 @@ public final class AiCommand {
         return 1;
     }
 
+    // ===== 玩家可用：自己的长期记忆（T001-8）=====
+
+    /**
+     * {@code /ai memory}（等同 {@code /ai memory show}）：列出自己的长期记忆。
+     *
+     * <p>它是记忆的「可核对」出口：模型替你记了什么，玩家应当能不靠问 AI 就看到原文。
+     * 只读自己的、不读别人的 —— 与记忆的工具边界保持一致。默认展示条数沿用
+     * {@code ai.toolMaxResults}，与工具单次返回的上限同一量级。
+     */
+    private static int showMemory(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        AiConfig config = AiRuntime.get().config();
+        if (!config.memoryEnabled()) {
+            context.getSource().sendSuccess(
+                    () -> Component.translatable("ai.ai_assisted.memory.disabled"), false);
+            return 1;
+        }
+        List<MemoryStore.Entry> entries = AiRuntime.get().memories()
+                .search(player.getUUID(), "", config.toolMaxResults());
+        if (entries.isEmpty()) {
+            context.getSource().sendSuccess(
+                    () -> Component.translatable("ai.ai_assisted.memory.none"), false);
+            return 1;
+        }
+        context.getSource().sendSuccess(
+                () -> Component.translatable("ai.ai_assisted.memory.header"), false);
+        for (MemoryStore.Entry entry : entries) {
+            String id = "#" + entry.id();
+            String text = entry.text();
+            context.getSource().sendSuccess(() -> Component.translatable(
+                    "ai.ai_assisted.memory.entry", id, text), false);
+        }
+        return 1;
+    }
+
+    /** {@code /ai memory clear}：清空自己的全部长期记忆并删除记忆文件（隐私出口）。 */
+    private static int clearMemory(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        AiConfig config = AiRuntime.get().config();
+        if (!config.memoryEnabled()) {
+            context.getSource().sendSuccess(
+                    () -> Component.translatable("ai.ai_assisted.memory.disabled"), false);
+            return 1;
+        }
+        AiRuntime.get().memories().clear(player.getUUID());
+        context.getSource().sendSuccess(
+                () -> Component.translatable("ai.ai_assisted.memory.cleared"), false);
+        return 1;
+    }
+
     private static int help(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         sendLine(source, "ai.ai_assisted.help.header");
         sendLine(source, "ai.ai_assisted.help.chat");
         sendLine(source, "ai.ai_assisted.help.clear");
         sendLine(source, "ai.ai_assisted.help.goal");
+        sendLine(source, "ai.ai_assisted.help.memory");
         sendLine(source, "ai.ai_assisted.help.whoami");
         sendLine(source, "ai.ai_assisted.help.confirm");
         sendLine(source, "ai.ai_assisted.help.cancel");

@@ -11,6 +11,11 @@ group = mod_group_id
 repositories {
     mavenLocal()
     mavenCentral()
+    // CurseMaven：只为 curse.maven 组服务（下方挂到运行环境的测试模组），不拖慢其它依赖的解析
+    maven {
+        url "https://www.cursemaven.com"
+        content { includeGroup "curse.maven" }
+    }
 }
 
 base {
@@ -40,6 +45,11 @@ minecraft {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+            // fg.deobf 拉进来的外部模组（暮色森林/家具等）mixin refmap 里仍是 SRG 名，
+            // 而 dev 运行时的类是 official 命名——不重映射的话 RF 的 EntityMixin 在应用期
+            // 找不到 m_20098_ 这类目标会直接崩。让 mixin 按 SRG→official 映射表现场翻译
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
 
             mods {
                 "${mod_id}" {
@@ -63,6 +73,14 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // ===== 测试环境模组（IDEA 的 runClient 会加载；发布 jar 不含它们）=====
+    // 暮色森林 1.20.1-4.3.1893
+    implementation fg.deobf("curse.maven:the-twilight-forest-227639:4865711")
+    // MrCrayfish 家具 Refurbished 1.20.1-1.0.20
+    implementation fg.deobf("curse.maven:refurbished-furniture-897116:7110922")
+    // 上面家具模组的强制前置（其 mods.toml 要求 framework [0.7.15,)）；缺了 runClient 直接起不来
+    implementation fg.deobf("curse.maven:framework-549225:6531428")
 
     // JUnit 5
     testImplementation platform('org.junit:junit-bom:5.11.4')

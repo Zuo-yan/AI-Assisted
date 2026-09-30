@@ -36,21 +36,21 @@
 
 | provider | 协议 | 用在 |
 |---|---|---|
-| `mock` | 本地回显，不联网 | **先试通用这个**：零成本确认界面/流程没问题 |
-| `openai-compatible` | `POST /chat/completions`（`messages`/`choices`/Bearer） | OpenAI 本身 + DeepSeek、通义、智谱、Kimi、LM Studio、vLLM、OpenRouter、Azure、**Claude 官方兼容层** |
-| `ollama` | Ollama 原生 `/api/chat` | 本地 Ollama（字段名与上面不同，才需要单列） |
+| `openai-compatible` | `POST /chat/completions`（`messages`/`choices`/Bearer） | **通用标准**：OpenAI 本身 + DeepSeek、通义、智谱、Kimi、LM Studio、vLLM、OpenRouter、Azure |
+| `openai-responses` | `POST /v1/responses`（`input`/`output`/Bearer） | OpenAI 官方新版协议：gpt-5、codex 等新模型的主入口；第三方兼容服务大多不提供 |
+| `anthropic` | `POST /v1/messages`（`system`/`content` 块/`x-api-key`） | Claude 官方接口；DeepSeek 等也提供 Anthropic 兼容端点 |
 
 常见 baseUrl（**以各家最新文档为准**，末尾斜杠有讲究，照抄）：
 
 | 服务 | baseUrl |
 |---|---|
-| OpenAI | `https://api.openai.com/v1/` |
-| DeepSeek | `https://api.deepseek.com/v1` |
+| OpenAI（compatible / responses 都用它） | `https://api.openai.com/v1/` |
+| DeepSeek（OpenAI 协议） | `https://api.deepseek.com/v1` |
+| DeepSeek（Anthropic 协议） | `https://api.deepseek.com/anthropic` |
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` |
-| Claude（官方 OpenAI 兼容层） | `https://api.anthropic.com/v1/` |
+| Claude（官方，选 `anthropic`） | `https://api.anthropic.com/v1/` |
 | LM Studio（本地） | `http://127.0.0.1:1234/v1` |
-| Ollama（本地，provider 选 `ollama`） | `http://127.0.0.1:11434` |
 
 界面上能改的就这些；`/ai status` 看当前生效值。
 
@@ -78,6 +78,7 @@
 | `/ai confirm` | 确认执行 AI 提议的动作（指令 / 建造） |
 | `/ai cancel` | 取消待确认的动作 |
 | `/ai undo` | 撤销最近一次 AI 建造（**需要 `ai.tool.adminLevel`，默认 2 级**；且不受两个总开关影响 —— 关掉开关不该锁死补救路径） |
+| `/ai memory` / `memory show` / `memory clear` | 查看 / 清空**自己的长期记忆**（跨会话保存在服务端本地，详见第 5 节） |
 | `/ai clear` | 清空本次对话历史（仅内存，重启也会清） |
 | `/ai help` | 帮助 |
 
@@ -109,9 +110,39 @@
 
 ---
 
-## 5. 两档"动手"能力（都默认关闭）
+## 5. 长期记忆（`ai.memory.enabled`，默认开启）
 
-### 5.1 提议执行指令（`ai.tool.dangerousEnabled`，默认 false）
+每个玩家一份记忆文件（`config/zuoyanmod/memory/<uuid>.json`），**跨会话保存**：重启、重进都不会丢。模型通过三个工具自主维护：
+
+| 工具 | 说明 |
+|---|---|
+| `memory_write` | 记住一条持久事实/偏好（一条一个事实，入库截断 500 字，自动清掉换行与尖括号） |
+| `memory_search` | 关键词查找（子串匹配；关键词留空 = 按时间倒序列出最近） |
+| `memory_forget` | 按编号删除过时/错误的记忆 |
+
+- 每轮对话自动把**最近 N 条**注入系统提示词（`ai.memory.injectCount`，默认 15，整块 1200 字封顶）；更早的记忆靠 `memory_search` 查
+- 条数上限 `ai.memory.maxEntries`（默认 100），超出时**挤掉最旧的一条**并告知模型
+- 玩家随时可以 `/ai memory show` 看到模型替自己记了什么原文，`/ai memory clear` 一键清空（记忆文件直接删除）
+- 关闭总开关后：工具不注册、不注入、不落盘；**已存在的记忆文件保留不删**
+- 记忆文件同时自动记录**玩家最新名字**（元数据）：AI 每轮都知道在跟谁说话，称呼才有落点
+
+---
+
+## 6. 进服问候（`ai.greeting.enabled`，默认开启）
+
+玩家加入服务器时，AI 会**只发给他本人**一条简短问候：叫出名字，并基于服务端刚采集的数据做一句话概况。
+
+- 数据（服务端主线程采集，只进该玩家这一次请求）：玩家名、游玩总时长、历史死亡次数、当前在线人数、TPS/MSPT、服务器连续运行时长、游戏内天数
+- 每次问候 = **1 次 LLM 调用**（不调用工具、不写对话历史）；同一玩家的最小间隔由 `ai.greeting.cooldownSeconds`（默认 600 秒）控制，防止反复重连刷问候、刷 API 额度
+- 前置不满足（功能关闭、没配模型/密钥、并发已满、冷却中）时**静默跳过**，不会报错打扰玩家
+- 带上长期记忆：有记忆时问候会自然衔接（欢迎回来、提起上次的约定）
+- 常与长期记忆搭配使用：问候引用记忆、聊天更新记忆，AI 的「主动性」从这里开始
+
+---
+
+## 7. 两档"动手"能力（都默认关闭）
+
+### 7.1 提议执行指令（`ai.tool.dangerousEnabled`，默认 false）
 
 ```
 你：帮我执行 list
@@ -122,7 +153,7 @@ AI：（调用 propose_command）
 
 四道约束：**默认关闭** + **只能提议**（模型无法独自完成一次执行，在聊天里说"确认"不算）+ **用你自己的权限集执行**（做不了你本来就做不到的事，也不绕过领地/保护插件）+ **审计日志**（`[AI][危险] 名字（等级 N）已执行 /xxx`）。
 
-### 5.2 交互式建筑增强与建造（`ai.build.enabled`，默认 false）
+### 7.2 交互式建筑增强与建造（`ai.build.enabled`，默认 false）
 
 AI 拥有整套建筑辅助与语义级手术能力，所有操作均**分 tick 安全执行**并记录撤销日志：
 
@@ -151,7 +182,7 @@ AI 拥有整套建筑辅助与语义级手术能力，所有操作均**分 tick 
 
 ---
 
-## 6. 会外发什么（隐私边界）
+## 8. 会外发什么（隐私边界）
 
 请求发到**你配置的**服务商，内容包含：
 
@@ -162,6 +193,8 @@ AI 拥有整套建筑辅助与语义级手术能力，所有操作均**分 tick 
 | 附近容器的**物品名** | 可关：`ai.tool.containersReadContents=false` |
 | 全服玩家**名单与坐标** | 仅当调用者达到 `ai.tool.adminLevel`；公开服请知情 |
 | 指令文本 / 建造蓝图 | 仅在你打开对应开关、且模型提议后 |
+| 你的长期记忆内容 | 可关：`ai.memory.enabled=false`（记忆与对话发往同一服务商） |
+| 进服问候的数据（在线数/TPS/你的游玩时长） | 仅发给该玩家自己的那次请求；可关：`ai.greeting.enabled=false` |
 
 | 不会发 | 说明 |
 |---|---|
@@ -172,7 +205,7 @@ AI 拥有整套建筑辅助与语义级手术能力，所有操作均**分 tick 
 
 ---
 
-## 7. 门槛（两个旋钮，别混）
+## 9. 门槛（两个旋钮，别混）
 
 | 配置 | 默认 | 管什么 |
 |---|---|---|
@@ -185,17 +218,19 @@ AI 拥有整套建筑辅助与语义级手术能力，所有操作均**分 tick 
 
 ---
 
-## 8. 费用与限额
+## 10. 费用与限额
 
 - 每次提问 = 1 次以上的 LLM 调用；**工具调用会多几次往返**（每次往返都计费）
 - 每次提问的往返上限：`ai.toolMaxSteps`（默认 4）—— 这是**费用上限**，达到时会明确提示"回答可能不完整"
 - 输出上限：`ai.maxTokens`（**建议调到 2048~4096**，见第 2 节）
 - 每个玩家的冷却：`ai.requestCooldownSeconds`；全局并发：`ai.maxConcurrentRequests`
 - 确认执行指令 / 确认建造后**不会**自动再调一次模型（省一次计费）
+- 长期记忆开启时，每轮请求固定多注入最多 1200 字的记忆块（条数由 `ai.memory.injectCount` 控制）
+- 进服问候每次 = 1 次额外调用（每次玩家进服最多一次，冷却内不重复，见第 6 节）
 
 ---
 
-## 9. 排错
+## 11. 排错
 
 | 现象 | 原因与处理 |
 |---|---|
@@ -213,9 +248,9 @@ AI 拥有整套建筑辅助与语义级手术能力，所有操作均**分 tick 
 
 ---
 
-## 10. 已知限制
+## 12. 已知限制
 
-- **对话历史与 `/ai goal` 都只在内存里**，服务端重启即清空（持久化属于另一个任务）
+- **对话历史与 `/ai goal` 都只在内存里**，服务端重启即清空；长期记忆已落盘（见第 5 节），重启不丢
 - 蓝图**不支持方块属性**：门/活板门这类有朝向的方块会用默认朝向，旋转建筑时可能不贴合
 - 撤销只保留**最近一次**建造，且 10 分钟内有效（仅内存）
 - **不能联网**：它答不了"去查一下 MC 百科"。原版机制靠模型自身知识 + `查配方` 工具核对真值；

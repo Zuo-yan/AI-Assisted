@@ -43,7 +43,8 @@ public final class AiConfigFields {
         BUILD,
         CONTEXT,
         HISTORY,
-        PERMISSION;
+        MEMORY,
+        GREETING;
 
         /** 组标题的语言文件键。 */
         public String labelKey() {
@@ -109,6 +110,9 @@ public final class AiConfigFields {
             text(AiConfigEdits.KEY_CHAT_PREFIX, Group.BASE),
             bool(AiConfigEdits.KEY_TOOL_CALLING_ENABLED, Group.BASE),
             bool(AiConfigEdits.KEY_CONTAINERS_READ_CONTENTS, Group.BASE),
+            // 管理权限门槛（原「更多设置」末页整组只有这一项，挪到主界面补空位）。
+            // 放在界面里意味着"能改权限的人可以把门槛降到把自己锁在外面之前"，所以默认 4
+            num("ai.permission.adminLevel", Kind.INT, Group.BASE, 0, 4),
 
             // ===== 更多设置 · 请求与回复 =====
             num("ai.timeoutSeconds", Kind.INT, Group.REQUEST, 1, 600),
@@ -152,9 +156,14 @@ public final class AiConfigFields {
             num("ai.history.maxMessages", Kind.INT, Group.HISTORY, 2, 200),
             num("ai.history.maxChars", Kind.INT, Group.HISTORY, 200, 200_000),
 
-            // ===== 更多设置 · 权限 =====
-            // 放在界面里意味着"能改权限的人可以把门槛降到把自己锁在外面之前"，所以默认 4
-            num("ai.permission.adminLevel", Kind.INT, Group.PERMISSION, 0, 4)
+            // ===== 更多设置 · 长期记忆（T001-8）=====
+            bool("ai.memory.enabled", Group.MEMORY),
+            num("ai.memory.maxEntries", Kind.INT, Group.MEMORY, 10, 500),
+            num("ai.memory.injectCount", Kind.INT, Group.MEMORY, 0, 50),
+
+            // ===== 更多设置 · 进服问候 =====
+            bool("ai.greeting.enabled", Group.GREETING),
+            num("ai.greeting.cooldownSeconds", Kind.INT, Group.GREETING, 0, 86400)
     );
 
     private AiConfigFields() {
@@ -172,7 +181,8 @@ public final class AiConfigFields {
 
     /** 「更多设置」里的分组，按声明顺序；不含 {@link Group#BASE}。 */
     public static List<Group> advancedGroups() {
-        return List.of(Group.REQUEST, Group.TOOL, Group.BUILD, Group.CONTEXT, Group.HISTORY, Group.PERMISSION);
+        return List.of(Group.REQUEST, Group.TOOL, Group.BUILD, Group.CONTEXT, Group.HISTORY, Group.MEMORY,
+                Group.GREETING);
     }
 
     /** 按键名查字段；未知键返回空（调用方据此拒绝伪造/版本错配的包）。 */
@@ -241,6 +251,11 @@ public final class AiConfigFields {
             case "ai.context.inventoryTopN" -> Integer.toString(config.inventoryTopN());
             case "ai.history.maxMessages" -> Integer.toString(config.historyMaxMessages());
             case "ai.history.maxChars" -> Integer.toString(config.historyMaxChars());
+            case "ai.memory.enabled" -> Boolean.toString(config.memoryEnabled());
+            case "ai.memory.maxEntries" -> Integer.toString(config.memoryMaxEntries());
+            case "ai.memory.injectCount" -> Integer.toString(config.memoryInjectCount());
+            case "ai.greeting.enabled" -> Boolean.toString(config.greetingEnabled());
+            case "ai.greeting.cooldownSeconds" -> Integer.toString(config.greetingCooldownSeconds());
             case "ai.permission.adminLevel" -> Integer.toString(config.adminLevel());
             default -> throw new IllegalArgumentException("字段表里有未实现投影的键：" + key);
         };

@@ -13,10 +13,13 @@ import java.util.function.Function;
 /**
  * Provider 工厂注册表：把配置里的 {@code ai.provider} 字符串映射成具体实现。
  *
- * <p>当前支持两种主流大模型接口协议：
+ * <p>当前支持三种主流大模型接口协议：
  * <ul>
- *   <li>{@code openai-compatible}：OpenAI 官方端点及所有兼容端点（DeepSeek / 通义千问 / 智谱 GLM 等）</li>
- *   <li>{@code anthropic}：Anthropic Messages API 端点（Claude 系列及中转）</li>
+ *   <li>{@code openai-compatible}：Chat Completions 协议 —— 事实上的通用标准，OpenAI 官方端点及
+ *       所有兼容端点（DeepSeek / 通义千问 / 智谱 GLM 等）都认它</li>
+ *   <li>{@code openai-responses}：OpenAI 官方新版 Responses 协议（gpt-5 / codex 等新模型的主入口）；
+ *       与 Chat Completions 是两套报文，第三方兼容服务大多不提供</li>
+ *   <li>{@code anthropic}：Anthropic Messages 协议端点（Claude 系列及兼容中转）</li>
  * </ul>
  *
  * <p>未知 id 默认回退到 {@code openai-compatible}。
@@ -27,7 +30,7 @@ public final class ProviderRegistry {
     }
 
     public static List<String> knownIds() {
-        return List.of(OpenAiCompatibleProvider.ID, AnthropicProvider.ID);
+        return List.of(OpenAiCompatibleProvider.ID, OpenAiResponsesProvider.ID, AnthropicProvider.ID);
     }
 
     private static final Set<String> KNOWN_IDS = Set.copyOf(knownIds());
@@ -38,6 +41,8 @@ public final class ProviderRegistry {
     public ProviderRegistry(HttpTransport transport) {
         this.transport = transport;
         register(OpenAiCompatibleProvider.ID, settings -> new OpenAiCompatibleProvider(
+                this.transport, settings.baseUrl(), settings.apiKey(), settings.timeout()));
+        register(OpenAiResponsesProvider.ID, settings -> new OpenAiResponsesProvider(
                 this.transport, settings.baseUrl(), settings.apiKey(), settings.timeout()));
         register(AnthropicProvider.ID, settings -> new AnthropicProvider(
                 this.transport, settings.baseUrl(), settings.apiKey(), settings.timeout()));

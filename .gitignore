@@ -25,3 +25,6 @@ out/
 /config/ai_assisted/ai-secret.dat
 /config/
 *.log
+
+# ZCode session workspace
+.zcode/
