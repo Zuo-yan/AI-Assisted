@@ -17,6 +17,7 @@ import org.gwfx.aiassisted.core.config.AiConfig;
 import org.gwfx.aiassisted.core.context.ContextSnapshot;
 import org.gwfx.aiassisted.core.http.HttpTransport;
 import org.gwfx.aiassisted.core.http.JdkHttpTransport;
+import org.gwfx.aiassisted.core.voice.VoiceClient;
 import org.gwfx.aiassisted.core.llm.LlmProvider;
 import org.gwfx.aiassisted.core.llm.ProviderRegistry;
 import org.gwfx.aiassisted.core.memory.MemoryStore;
@@ -111,6 +112,7 @@ public final class AiRuntime {
     private volatile HttpTransport transport;
     private volatile ProviderRegistry providers;
     private volatile LlmProvider provider;
+    private volatile VoiceClient voiceClient;
 
     /** 由配置事件置位、在下一个服务端 tick 处理（见 {@link #requestReload()}）。 */
     private volatile boolean reloadPending;
@@ -122,6 +124,7 @@ public final class AiRuntime {
         this.transport = new JdkHttpTransport(CONNECT_TIMEOUT, this.config.retryCount());
         this.providers = new ProviderRegistry(this.transport);
         this.provider = createProvider(this.providers, this.config);
+        this.voiceClient = new VoiceClient(this.transport);
 
         this.chatService = new AiChatService(
                 this.redactor, this.keyStore, this.collector, this.sessions, this.dispatcher,
@@ -131,6 +134,10 @@ public final class AiRuntime {
         LOGGER.info("[AI] 初始化完成：provider={}（配置值 '{}'），model={}",
                 this.provider.id(), this.config.provider(),
                 this.config.hasModel() ? this.config.model() : "(未设置)");
+    }
+
+    public VoiceClient voiceClient() {
+        return this.voiceClient;
     }
 
     public AiConfig config() {
@@ -213,6 +220,7 @@ public final class AiRuntime {
         this.transport = newTransport;
         this.providers = newRegistry;
         this.provider = newProvider;
+        this.voiceClient = new VoiceClient(newTransport);
         this.chatService.reconfigure(newConfig, newProvider);
 
         if (oldTransport != null) {

@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.state.BlockState;
 import org.gwfx.aiassisted.core.build.BuildPlacement;
@@ -109,7 +110,7 @@ public final class BuildManager {
         // 每个方块的注册表查询只做一次、后面每 tick 的推进循环里没有任何注册表访问
         Map<String, BlockState> states = new LinkedHashMap<>();
         for (String blockId : plan.materialCounts().keySet()) {
-            BlockState state = BuildExecutor.stateFor(blockId);
+            BlockState state = BuildExecutor.stateFor(blockId, toDirection(placement.facing()));
             if (state == null) {
                 return Component.translatable("ai.ai_assisted.build.unknown_block", blockId);
             }
@@ -271,5 +272,17 @@ public final class BuildManager {
     private static int estimateSeconds(int blockCount, int blocksPerTick) {
         int perTick = Math.max(1, blocksPerTick);
         return Math.max(1, (int) Math.ceil(blockCount / (double) perTick / 20.0D));
+    }
+
+    private static Direction toDirection(BuildPlacement.Facing facing) {
+        if (facing == null) {
+            return Direction.NORTH;
+        }
+        return switch (facing) {
+            case NORTH -> Direction.NORTH;
+            case SOUTH -> Direction.SOUTH;
+            case WEST -> Direction.WEST;
+            case EAST -> Direction.EAST;
+        };
     }
 }

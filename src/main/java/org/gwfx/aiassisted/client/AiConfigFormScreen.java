@@ -64,9 +64,9 @@ abstract class AiConfigFormScreen extends Screen {
     /** 控件高度（输入框/按钮）。略小于行高，留出一点呼吸空间。 */
     private static final int CONTROL_H = 14;
     /** 项与项之间的留白，避免说明和下一项的控件贴在一起。 */
-    private static final int ITEM_GAP = 4;
+    private static final int ITEM_GAP = 5;
     /** 底部留给状态行与按钮的高度（与原布局一致）。 */
-    private static final int BOTTOM_RESERVED = 74;
+    private static final int BOTTOM_RESERVED = 48;
 
     private static final int COLOR_TITLE = 0xFFFFFFFF;
     protected static final int COLOR_LABEL = 0xFFE0E0E0;
@@ -223,6 +223,11 @@ abstract class AiConfigFormScreen extends Screen {
         this.controlH = CONTROL_H;
         this.descLines = DESC_LINES;
         int rowsPerColumn = available / itemHeight(this.descLines);
+        // 容差优化：若 4 行所需高度与 available 差距在 12px 以内（常见于 1080p Scale 4 下的微小四舍五入差异），
+        // 允许紧凑排入 4 行（即每页 8 个槽位），避免让仅有 7~8 个项的分组孤立拆出单项新页
+        if (rowsPerColumn == 3 && available >= 4 * itemHeight(this.descLines) - 12) {
+            rowsPerColumn = 4;
+        }
         if (rowsPerColumn < 2) {
             this.descLines = 1;
             rowsPerColumn = available / itemHeight(this.descLines);
@@ -316,17 +321,27 @@ abstract class AiConfigFormScreen extends Screen {
         rebuildWidgets();
     }
 
+    private int currentLeftCount() {
+        int total = currentRows().size();
+        return Math.max(1, Math.min(this.perColumn, (total + 1) / 2));
+    }
+
+    private boolean isLeftColumn(int index) {
+        return index < currentLeftCount();
+    }
+
     private int rowX(int index) {
-        return (index < this.perColumn ? this.leftX : this.rightX) + LABEL_W + 4;
+        return (isLeftColumn(index) ? this.leftX : this.rightX) + LABEL_W + 4;
     }
 
     /** 标签的 x：与控件同列，但贴着列首（控件让出 LABEL_W 的宽度给标签）。 */
     private int labelX(int index) {
-        return index < this.perColumn ? this.leftX : this.rightX;
+        return isLeftColumn(index) ? this.leftX : this.rightX;
     }
 
     private int rowY(int index) {
-        int row = index < this.perColumn ? index : index - this.perColumn;
+        int leftCount = currentLeftCount();
+        int row = isLeftColumn(index) ? index : index - leftCount;
         return this.rowsTop + row * itemHeight(this.descLines);
     }
 

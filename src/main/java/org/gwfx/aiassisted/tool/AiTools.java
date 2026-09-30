@@ -39,6 +39,7 @@ public final class AiTools {
                                            MemoryStore memories) {
         ToolRegistry registry = new ToolRegistry();
         registry.register(SearchBlocksTool.spec(), args -> SearchBlocksTool.invoke(player, config, args));
+        registry.register(SearchAvailableBlocksTool.spec(), SearchAvailableBlocksTool::invoke);
         registry.register(SearchEntitiesTool.spec(), args -> SearchEntitiesTool.invoke(player, config, args));
         registry.register(SearchRecipesTool.spec(),
                 args -> SearchRecipesTool.invoke((ServerLevel) player.level(), recipeIndex, config, args));

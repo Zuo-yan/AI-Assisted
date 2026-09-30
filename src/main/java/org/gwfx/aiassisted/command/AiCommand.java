@@ -318,67 +318,12 @@ public final class AiCommand {
     private static int confirmPending(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        AiRuntime runtime = AiRuntime.get();
-        long now = System.currentTimeMillis();
-        AiConfig config = runtime.config();
-        int level = AiPermissions.highestLevelFor(player);
-
-        // ===== 先看有没有待确认的建造（T001-6）=====
-        // 建造比一条指令更"重"（会真的改一片世界），所以优先处理它。
-        Optional<PendingBuildStore.Pending> pendingBuild =
-                runtime.pendingBuilds().take(player.getUUID(), now);
-        if (pendingBuild.isPresent()) {
-            return startPendingBuild(context, runtime, config, level, pendingBuild.get());
-        }
-
-        Optional<PendingCommandStore.Pending> pending =
-                runtime.pendingCommands().take(player.getUUID(), now);
-        if (pending.isEmpty()) {
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.none"));
+        AiConfirmHandler.Result result = AiConfirmHandler.confirm(player);
+        if (!result.success()) {
+            context.getSource().sendFailure(result.chatMessage());
             return 0;
         }
-        PendingCommandStore.Pending record = pending.get();
-
-        if (!config.dangerousToolsEnabled()) {
-            audit(player, level, record.command(), "拒绝：危险级开关已关闭");
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.disabled"));
-            return 0;
-        }
-        if (level < config.toolAdminLevel()) {
-            audit(player, level, record.command(), "拒绝：权限不足");
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.low_level",
-                    level, config.toolAdminLevel()));
-            return 0;
-        }
-
-        MinecraftServer server = player.level().getServer();
-        if (server == null) {
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.error.no_server"));
-            return 0;
-        }
-
-        // 执行：用玩家自己的权限集 + 一个收集输出的 source。
-        // 与玩家自己敲这条指令走的是同一条 dispatcher 路径 —— 我们不绕过任何权限或保护插件。
-        CommandOutputCollector collector = new CommandOutputCollector();
-        CommandSourceStack source = player.createCommandSourceStack()
-                .withSource(collector)
-                .withPermission(AiPermissions.highestLevelFor(player));
-        server.getCommands().performPrefixedCommand(source, record.command());
-
-        String output = collector.isEmpty()
-                ? Component.translatable("ai.ai_assisted.command.no_output").getString()
-                : collector.text();
-        // 存成上下文事实：确认后我们刻意不再自动调一次模型，结果只能靠下一轮对话带回去
-        runtime.lastCommands().record(player.getUUID(), record.command(), output, now);
-        audit(player, level, record.command(), "已执行");
-
-        context.getSource().sendSuccess(() -> Component.translatable(
-                "ai.ai_assisted.command.executed", record.command()), false);
-        // 换行在 MC 聊天里是硬换行（与 /ai debug context 的处理一致），整块一条消息发出去
-        context.getSource().sendSuccess(() -> Component.literal(output), false);
-        if (collector.truncated()) {
-            sendLine(context.getSource(), "ai.ai_assisted.command.truncated");
-        }
+        context.getSource().sendSuccess(result::chatMessage, false);
         return 1;
     }
 
@@ -386,20 +331,12 @@ public final class AiCommand {
     private static int cancelPending(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        long now = System.currentTimeMillis();
-        AiRuntime runtime = AiRuntime.get();
-
-        Optional<PendingBuildStore.Pending> build = runtime.pendingBuilds().take(player.getUUID(), now);
-        Optional<PendingCommandStore.Pending> pending = runtime.pendingCommands().take(player.getUUID(), now);
-        if (build.isEmpty() && pending.isEmpty()) {
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.none"));
+        AiConfirmHandler.Result result = AiConfirmHandler.cancel(player);
+        if (!result.success()) {
+            context.getSource().sendFailure(result.chatMessage());
             return 0;
         }
-        build.ifPresent(found -> audit(player, AiPermissions.highestLevelFor(player),
-                "建造「" + found.name() + "」", "玩家取消"));
-        pending.ifPresent(found -> audit(player, AiPermissions.highestLevelFor(player),
-                found.command(), "玩家取消"));
-        context.getSource().sendSuccess(() -> Component.translatable("ai.ai_assisted.command.cancelled_all"), false);
+        context.getSource().sendSuccess(result::chatMessage, false);
         return 1;
     }
 

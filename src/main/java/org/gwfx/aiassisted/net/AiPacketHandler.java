@@ -11,18 +11,7 @@ import org.slf4j.Logger;
 import java.util.Optional;
 
 /**
- * 网络层入口（1.20.1 Forge 的 SimpleChannel 形态；26.3 分支等价物是 PayloadRegistrar）。
- *
- * <p>六个包的方向与 26.3 保持一致：
- * <ul>
- *   <li>服务端 → 客户端：{@link AiChatReplyPacket}、{@link AiConfigSyncPacket}、
- *       {@link AiTestConnectionResultPacket}</li>
- *   <li>客户端 → 服务端：{@link RequestAiConfigPacket}、{@link AiConfigUpdatePacket}、
- *       {@link AiTestConnectionPacket}</li>
- * </ul>
- *
- * <p>协议版本固定为 "1"：通道按版本协商，双端一致才允许连接。
- * 包的编解码走 {@code FriendlyByteBuf}，字段与 26.3 的 StreamCodec 一一对应。
+ * 网络层入口（1.20.1 Forge 的 SimpleChannel 形态）。
  */
 public final class AiPacketHandler {
 
@@ -40,14 +29,13 @@ public final class AiPacketHandler {
     private AiPacketHandler() {
     }
 
-    /** 在模组构造期调用（见 {@code AiAssistedMod}）：1.20.1 的消息注册没有独立事件。 */
     public static void register() {
-        // AI 聊天：服务端把回复分页下发（只读展示，不需要客户端回传）
+        // AI 聊天：服务端把回复分页下发
         CHANNEL.registerMessage(packetId++, AiChatReplyPacket.class,
                 AiChatReplyPacket::encode, AiChatReplyPacket::decode, AiChatReplyPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
 
-        // AI 图形化配置：打开界面请求快照 → 提交修改 → 服务端回权威快照
+        // AI 图形化配置
         CHANNEL.registerMessage(packetId++, RequestAiConfigPacket.class,
                 RequestAiConfigPacket::encode, RequestAiConfigPacket::decode, RequestAiConfigPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
@@ -67,7 +55,12 @@ public final class AiPacketHandler {
                 AiTestConnectionResultPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
 
-        LOGGER.info("[AiAssisted-Network] Successfully registered packet handlers");
+        // AI 语音交互（STT 上行 与 TTS 下行）
+        CHANNEL.registerMessage(packetId++, AiVoiceInputPacket.class,
+                AiVoiceInputPacket::encode, AiVoiceInputPacket::decode, AiVoiceInputPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+
+        LOGGER.info("[AiAssisted-Network] Successfully registered packet handlers (including voice channels)");
     }
 
     public static void sendRequestAiConfig() {
@@ -88,6 +81,17 @@ public final class AiPacketHandler {
             payload = "{}";
         }
         sendToServer(new AiConfigUpdatePacket(payload));
+    }
+
+    public static void sendVoiceInput(byte[] audioData) {
+        sendVoiceInput(audioData, "");
+    }
+
+    public static void sendVoiceInput(byte[] audioData, String recognizedText) {
+        byte[] safeAudio = audioData == null ? new byte[0] : audioData;
+        if (safeAudio.length <= AiVoiceInputPacket.MAX_AUDIO_BYTES) {
+            sendToServer(new AiVoiceInputPacket(safeAudio, recognizedText));
+        }
     }
 
     private static void sendToServer(Object packet) {

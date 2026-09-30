@@ -9,21 +9,21 @@ import net.minecraftforge.fml.common.Mod;
 import org.gwfx.aiassisted.AiAssistedMod;
 
 /**
- * AI 配置界面的按键（默认 <b>O</b>）。
- *
- * <p>1.20.1 的按键分类是纯字符串（26.3 是 {@code KeyMapping.Category} 对象），
- * 分类名本身就是一个语言文件键，见 {@link #CATEGORY}。
- * 注册在 MOD 总线（{@link RegisterKeyMappingsEvent}）；按下判定在 {@link AiClientEvents}。
+ * AI 按键注册（MOD 总线）。
  */
 @Mod.EventBusSubscriber(modid = AiAssistedMod.MODID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class AiConfigKeyHandler {
 
-    /** 自定义按键分类（控制界面的分组标题），语言键 {@code key.categories.ai_assisted}。 */
+    /** 自定义按键分类，语言键 {@code key.categories.ai_assisted}。 */
     public static final String CATEGORY = "key.categories.ai_assisted";
 
     public static final KeyMapping OPEN_AI_CONFIG =
             new KeyMapping("key.ai_assisted.open_ai_config", InputConstants.Type.KEYSYM,
                     InputConstants.KEY_O, CATEGORY);
+
+    public static final KeyMapping VOICE_PTT =
+            new KeyMapping("key.ai_assisted.voice_ptt", InputConstants.Type.KEYSYM,
+                    InputConstants.KEY_V, CATEGORY);
 
     private AiConfigKeyHandler() {
     }
@@ -31,5 +31,6 @@ public final class AiConfigKeyHandler {
     @SubscribeEvent
     public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
         event.register(OPEN_AI_CONFIG);
+        event.register(VOICE_PTT);
     }
 }

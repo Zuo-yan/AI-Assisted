@@ -209,5 +209,7 @@ class AiConfigTest {
         assertTrue(defaultConfig().hasModel());
         assertFalse(config("openai-compatible", "x", 0.7D, 1, Duration.ofSeconds(1), 0, "   ").hasModel());
     }
-}
 
+    // ===== 语音配置 =====
+
+    }

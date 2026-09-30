@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -166,6 +167,11 @@ public final class AiChatService {
 
     /** 处理一次玩家请求。必须在服务端主线程调用。 */
     public void request(ServerPlayer player, String rawText) {
+        request(player, rawText, null);
+    }
+
+    /** 处理一次玩家请求，并在获得最终模型文字回复时触发回调。必须在服务端主线程调用。 */
+    public void request(ServerPlayer player, String rawText, Consumer<String> onCompletion) {
         AiConfig currentConfig = this.config;
         String text = rawText == null ? "" : rawText.strip();
 
@@ -268,7 +274,7 @@ public final class AiChatService {
 
         future.whenComplete((result, error) ->
                 // 回调只负责把收尾投递回主线程；这里绝不碰世界
-                server.execute(() -> complete(player, history, text, result, error)));
+                server.execute(() -> complete(player, history, text, result, error, onCompletion)));
     }
 
     /**
@@ -431,7 +437,7 @@ public final class AiChatService {
 
     /** 网络回调收尾（已在主线程）。 */
     private void complete(ServerPlayer player, ChatHistory history, String userText,
-                          AgentLoop.Result result, Throwable error) {
+                          AgentLoop.Result result, Throwable error, Consumer<String> onCompletion) {
         this.inFlight.decrementAndGet();
 
         if (error != null) {
@@ -459,6 +465,13 @@ public final class AiChatService {
 
         List<Component> components = new ArrayList<>();
         if (!reply.isEmpty()) {
+            if (onCompletion != null) {
+                try {
+                    onCompletion.accept(reply);
+                } catch (Throwable t) {
+                    LOGGER.debug("[AI] onCompletion 回调异常: {}", t.getMessage());
+                }
+            }
             List<String> pages = TextPager.paginate(reply, currentConfig.replyChunkSize());
             for (int i = 0; i < pages.size(); i++) {
                 components.add(i == 0

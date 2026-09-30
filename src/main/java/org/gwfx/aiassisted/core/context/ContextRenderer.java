@@ -80,6 +80,9 @@ public final class ContextRenderer {
         appendContainers(out, snapshot.nearbyContainers());
         appendVillage(out, snapshot);
         appendRecentCommand(out, snapshot.recentCommand());
+        if (!snapshot.installedMods().isEmpty()) {
+            out.append("已加载第三方模组: ").append(String.join(", ", snapshot.installedMods())).append('\n');
+        }
 
         out.append("快照状态: ")
                 .append(snapshot.stale() ? "可能已过期，请勿当作实时事实" : "实时")
@@ -110,7 +113,7 @@ public final class ContextRenderer {
                 + "调用者的权限等级由服务端给出：不要假设自己或调用者拥有比它更高的权限，"
                 + "你能调用的工具已经按该等级裁剪过 —— 看不到的工具就是不开放的，直接说明即可。"
                 + "关于工具与操作提议：若要查询信息、提议执行指令或提议建造/拆除，你必须发起真正的工具调用（Tool Call），"
-                + "严禁仅在回复文本中伪造、假装或声称自己已经提交了指令或方案，严禁在未真正调用工具时让玩家输入 /ai confirm；"
+                + "严禁仅在回复文本中伪造、假装或声称自己已经提交了指令或方案，严禁在未真正调用工具时让玩家输入 /ai confirm 或说确认；提议后必须告知玩家可通过 /ai confirm 或语音回复「确认」进行执行；当前世界若加载了第三方模组，当玩家要求特定风格或模组材料时，请先调用 search_available_blocks 工具查询合法方块 ID，并在建造蓝图中调用它们；"
                 + "未调用工具时玩家输入 /ai confirm 会提示没有待确认的指令。";
     }
 

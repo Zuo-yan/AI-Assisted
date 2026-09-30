@@ -9,9 +9,6 @@ import java.time.Duration;
  *
  * <p>刻意<b>不含任何密钥字段</b>：本对象会被 {@code /ai status} 回显、也可能进日志，
  * 密钥只由 {@code ProviderRegistry.ProviderSettings} 随 Provider 构造单独注入。
- *
- * <p>构造时统一做归一化与夹紧，保证下游（ContextBuilder / Provider / 分页器）
- * 拿到的值一定是合理范围，不必各自重复校验。
  */
 public record AiConfig(
         boolean enabled,
@@ -45,64 +42,22 @@ public record AiConfig(
         int toolMaxScanBlocks,
         int toolLoopTimeoutSeconds,
         boolean containersReadContents,
-        /**
-         * 谁能改 AI 配置（0~4，Minecraft 权限等级）。判定见 {@code ai.AiPermissions}。
-         *
-         * <p>它不影响对话本身的任何行为，但必须在这里 —— 图形化配置界面要能读能写它，
-         * 而界面读的正是本对象；没有它，这一项就得在界面/校验/快照三处各开一个特例。
-         */
         int adminLevel,
-        /**
-         * 使用管理员级工具（{@code server_info} / {@code propose_command}）所需的最低权限等级（0~4，默认 2=OP）。
-         *
-         * <p>与 {@link #adminLevel} 是两个旋钮：那个管"能不能改配置"（影响全服），
-         * 这个管"能不能用指令 / 读全服信息"（最多做成本人本来就能做的事）。
-         */
         int toolAdminLevel,
-        /**
-         * 危险级工具总开关（默认 false）。
-         *
-         * <p>关闭时 {@code propose_command} 不注册 —— 模型看不到它，也就不会去提议执行指令。
-         */
         boolean dangerousToolsEnabled,
-        /** AI 建造总开关（默认 false）。关闭时 {@code propose_build} 不注册。 */
         boolean buildEnabled,
-        /** 是否放权 AI 对建筑/非自然地形的所有操作（允许覆盖/拆除非自然地形）。 */
         boolean buildAllowNonNaturalTerrain,
-        /** 单次建造体积上限（包围盒格子数）。 */
         int buildMaxBlocks,
-        /** 每 tick 放置预算。 */
         int buildBlocksPerTick,
-        /**
-         * AI 长期记忆总开关（T001-8，默认 true）。
-         *
-         * <p>关闭时 memory_* 三工具不注册、不注入、不落盘 —— 模型看不到工具名，
-         * 也就不会承诺「我会记住」。已存在的记忆文件保留不删。
-         */
         boolean memoryEnabled,
-        /** 单玩家记忆条数上限，超出挤掉最旧的（10~500）。 */
         int memoryMaxEntries,
-        /** 每轮注入系统提示词的最近记忆条数（0~50，0=只存不注入）。 */
         int memoryInjectCount,
-        /**
-         * 进服问候总开关（默认 true）。
-         *
-         * <p>开启后玩家加入服务器时，AI 会主动发一次简短问候（只发给该玩家）：
-         * 叫名字 + 结合服务端刚采集的数据做一句话概况。每次问候 = 1 次 LLM 调用。
-         */
         boolean greetingEnabled,
-        /** 同一玩家两次进服问候的最小间隔（秒，0~86400），防反复重连刷问候。 */
         int greetingCooldownSeconds) {
 
     public static final Duration MIN_TIMEOUT = Duration.ofSeconds(1);
     public static final Duration MAX_TIMEOUT = Duration.ofMinutes(10);
 
-    /**
-     * 温度的允许区间。
-     *
-     * <p>提成常量是为了让「图形化配置界面」的写入校验与这里的夹紧<b>共用同一份定义</b> ——
-     * 否则界面上写 0.0~2.0、这里悄悄夹到别的范围，玩家会以为生效了其实没有。
-     */
     public static final double MIN_TEMPERATURE = 0.0D;
     public static final double MAX_TEMPERATURE = 2.0D;
     public static final int MIN_MAX_TOKENS = 1;
@@ -143,53 +98,34 @@ public record AiConfig(
         historyMaxMessages = clamp(historyMaxMessages, 2, 200);
         historyMaxChars = clamp(historyMaxChars, 200, 200_000);
 
-        // 工具调用：步数是费用上限，必须有下界；扫描预算是主线程工作量上限，同样不能为 0
         toolMaxSteps = clamp(toolMaxSteps, 1, 16);
         toolMaxResults = clamp(toolMaxResults, 1, 64);
         toolMaxScanBlocks = clamp(toolMaxScanBlocks, 1024, 1_048_576);
         toolLoopTimeoutSeconds = clamp(toolLoopTimeoutSeconds, 1, 600);
 
-        // 与 Config 的 defineInRange(..., 0, 4) 一致；越界夹紧而不是拒绝，理由同上
         adminLevel = clamp(adminLevel, 0, 4);
         toolAdminLevel = clamp(toolAdminLevel, 0, 4);
-        // dangerousToolsEnabled / buildEnabled 是玩家自己拍的板，AiConfig 只如实传递
         buildMaxBlocks = clamp(buildMaxBlocks, 1, 32768);
         buildBlocksPerTick = clamp(buildBlocksPerTick, 1, 512);
 
-        // 记忆条数给下界 10：上限低于 10 条记忆功能就没意义了，不如让人直接关总开关
         memoryMaxEntries = clamp(memoryMaxEntries, 10, 500);
         memoryInjectCount = clamp(memoryInjectCount, 0, 50);
 
-        // 问候冷却 0 是合法值（每次进服都问候）；上限一天，再长就没有"冷却"的意义了
         greetingCooldownSeconds = clamp(greetingCooldownSeconds, 0, 86400);
     }
 
-    /**
-     * 实际生效的 Provider 协议 id（未知值回退 {@code openai-compatible}）。
-     *
-     * <p>与 {@link #provider()} 分开保留：{@code /ai status} 需要同时显示
-     * 「你填的是什么」和「实际用的是什么」，否则用户拼错 provider 时会一脸茫然。
-     */
     public String effectiveProvider() {
         return ProviderRegistry.normalizeId(provider);
     }
 
-    /**
-     * 当前 Provider 是否必须要有密钥。
-     *
-     * <p>只有 {@code openai-compatible} 需要 —— 本地部署的 OpenAI 兼容服务常见无鉴权，
-     * 因此这里不强制，真需要时由服务端返回 401 再提示。
-     */
     public boolean requiresApiKey() {
         return "openai-compatible".equals(effectiveProvider()) || "anthropic".equals(effectiveProvider());
     }
 
-    /** 模型名为空时无法发请求，调用方应先提示用户配置。 */
     public boolean hasModel() {
         return !model.isEmpty();
     }
 
-    /** 去空白、去末尾斜杠；粘成完整端点的（带 /chat/completions 后缀）也一并剥掉。空输入保持为空，交由调用方判断。 */
     public static String normalizeBaseUrl(String url) {
         if (url == null) {
             return "";
@@ -198,8 +134,6 @@ public record AiConfig(
         while (trimmed.endsWith("/")) {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
-        // 玩家常把文档里的完整端点整个粘进来：不剥掉后缀会拼出
-        // .../chat/completions/chat/completions，404 还看不出原因
         if (trimmed.endsWith("/chat/completions")) {
             trimmed = trimmed.substring(0, trimmed.length() - "/chat/completions".length());
         }
@@ -227,4 +161,3 @@ public record AiConfig(
         return Math.max(min, Math.min(max, value));
     }
 }
-

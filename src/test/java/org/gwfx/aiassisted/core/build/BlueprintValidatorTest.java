@@ -57,4 +57,11 @@ class BlueprintValidatorTest {
     void rejectsNullBlueprint() {
         assertTrue(BlueprintValidator.validate(null, 4096).isPresent());
     }
+
+    @Test
+    void acceptsModdedBlocksFromThirdPartyMods() {
+        assertTrue(BlueprintValidator.validate(blueprint("twilightforest:canopy_planks"), 4096).isEmpty());
+        assertTrue(BlueprintValidator.validate(blueprint("refurbished_furniture:oak_chair"), 4096).isEmpty());
+        assertTrue(BlueprintValidator.validate(blueprint("create:andesite_casing"), 4096).isEmpty());
+    }
 }
