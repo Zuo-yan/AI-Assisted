@@ -82,7 +82,9 @@ public final class AiClientEvents {
             int x = (screenWidth - textWidth) / 2;
             int y = screenHeight - 65;
             graphics.fill(x - 4, y - 2, x + textWidth + 4, y + 10, 0x88000000);
-            graphics.text(font, text, x, y, 0xFFFFFF);
+            // 26.3 的 GuiGraphicsExtractor.text 在 ARGB.alpha(color)==0 时整段跳过
+            // （1.20.1 会把 alpha=0 特判成不透明），所以这里必须带 0xFF alpha 通道
+            graphics.text(font, text, x, y, 0xFFFFFFFF);
         }
     }
 }
