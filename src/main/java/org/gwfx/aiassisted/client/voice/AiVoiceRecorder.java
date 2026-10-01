@@ -21,6 +21,10 @@ public final class AiVoiceRecorder {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    /** 单次最长录音时长（毫秒）：60 秒保护上限，防按键卡死或失焦导致的内存无限增长。 */
+    public static final long MAX_RECORDING_MILLIS = 60_000L;
+    public static final int MAX_PCM_BYTES = 1_920_000;
+
     private final AudioFormat format;
     private final DataLine.Info info;
     private TargetDataLine line;
@@ -66,10 +70,18 @@ public final class AiVoiceRecorder {
         captureThread = new Thread(() -> {
             byte[] buffer = new byte[2048];
             while (recording.get()) {
+                if (System.currentTimeMillis() - recordStartTime >= MAX_RECORDING_MILLIS) {
+                    LOGGER.info("[AI-Voice] 录音已达最大时长上限（{} 秒），停止采集", MAX_RECORDING_MILLIS / 1000);
+                    break;
+                }
                 int read = line.read(buffer, 0, buffer.length);
                 if (read > 0) {
                     synchronized (pcmBuffer) {
-                        pcmBuffer.write(buffer, 0, read);
+                        if (pcmBuffer.size() + read <= MAX_PCM_BYTES) {
+                            pcmBuffer.write(buffer, 0, read);
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
@@ -144,5 +156,9 @@ public final class AiVoiceRecorder {
             return 0;
         }
         return System.currentTimeMillis() - recordStartTime;
+    }
+
+    public boolean isDurationLimitExceeded() {
+        return recording.get() && getRecordingDurationMillis() >= MAX_RECORDING_MILLIS;
     }
 }

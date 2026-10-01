@@ -270,6 +270,7 @@
   "key.ai_assisted.voice_ptt": "语音对讲 (按住说话)",
   "ai.ai_assisted.voice.recording": "● 正在录音... 松开完成输入",
   "ai.ai_assisted.voice.transcribing": "正在识别语音...",
+  "ai.ai_assisted.voice.max_duration": "§e录音已达最大时长上限（60秒），已自动完成",
   "ai.ai_assisted.voice.too_short": "录音时间过短",
   "ai.ai_assisted.voice.disabled": "语音交互功能未开启，请先在配置中开启 ai.voice.enabled",
   "ai.ai_assisted.voice.transcribed": "§e[语音输入] §f%s",

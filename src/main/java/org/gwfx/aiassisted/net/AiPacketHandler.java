@@ -93,9 +93,17 @@ public final class AiPacketHandler {
 
     public static void sendVoiceInput(byte[] audioData, String recognizedText) {
         byte[] safeAudio = audioData == null ? new byte[0] : audioData;
-        if (safeAudio.length <= AiVoiceInputPacket.MAX_AUDIO_BYTES) {
-            sendToServer(new AiVoiceInputPacket(safeAudio, recognizedText));
+        String safeText = recognizedText == null ? "" : recognizedText;
+        if (safeAudio.length > AiVoiceInputPacket.MAX_AUDIO_BYTES) {
+            if (!safeText.isBlank()) {
+                // 本地有识别文本，丢弃过大音频数据并仅上报文本
+                sendToServer(new AiVoiceInputPacket(new byte[0], safeText));
+            } else {
+                LOGGER.warn("[AiAssisted-Network] 语音数据超过上限且无转录文本，丢弃");
+            }
+            return;
         }
+        sendToServer(new AiVoiceInputPacket(safeAudio, safeText));
     }
 
     private static void sendToServer(CustomPacketPayload payload) {

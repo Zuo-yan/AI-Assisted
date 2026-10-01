@@ -270,6 +270,7 @@
   "key.ai_assisted.voice_ptt": "Voice Push-to-Talk",
   "ai.ai_assisted.voice.recording": "● Recording... Release to submit",
   "ai.ai_assisted.voice.transcribing": "Transcribing speech...",
+  "ai.ai_assisted.voice.max_duration": "§eRecording reached the maximum duration limit (60s); submitted automatically",
   "ai.ai_assisted.voice.too_short": "Recording too short",
   "ai.ai_assisted.voice.disabled": "Voice chat is disabled. Enable ai.voice.enabled first.",
   "ai.ai_assisted.voice.transcribed": "§e[Voice Input] §f%s",

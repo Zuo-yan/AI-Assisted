@@ -69,7 +69,12 @@ public final class AiLocalVoiceRecognizer {
             String script = "\uFEFF" +
                     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n" +
                     "Add-Type -AssemblyName System.Speech;\n" +
-                    "$engine = New-Object System.Speech.Recognition.SpeechRecognitionEngine;\n" +
+                    "$rec = [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers() | Where-Object { $_.Culture.Name -like 'zh*' } | Select-Object -First 1;\n" +
+                    "if ($rec -ne $null) {\n" +
+                    "    $engine = New-Object System.Speech.Recognition.SpeechRecognitionEngine($rec.Id);\n" +
+                    "} else {\n" +
+                    "    $engine = New-Object System.Speech.Recognition.SpeechRecognitionEngine;\n" +
+                    "}\n" +
                     "\n" +
                     "$choices = New-Object System.Speech.Recognition.Choices;\n" +
                     "$choices.Add([string[]]@(\n" +

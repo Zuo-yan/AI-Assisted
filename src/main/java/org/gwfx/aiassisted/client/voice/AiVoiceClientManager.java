@@ -50,13 +50,20 @@ public final class AiVoiceClientManager {
             // 优先在本地快速语音识别，并将音频与识别文本一并提交服务端
             AiLocalVoiceRecognizer.transcribe(wavBytes).whenComplete((localText, err) -> {
                 String text = (localText == null) ? "" : localText.strip();
-                AiPacketHandler.sendVoiceInput(wavBytes, text);
+                // 优化：若本地已转录出文本，服务端直接使用文本驱动 Agent，不再需要原始音频。
+                // 传空字节数组可免去数百 KB 至 2MB 的大包网络传输，避免网络尖峰与超大包静默丢弃
+                byte[] audioToSend = text.isEmpty() ? wavBytes : new byte[0];
+                AiPacketHandler.sendVoiceInput(audioToSend, text);
             });
         }
     }
 
     public boolean isRecording() {
         return recorder.isRecording();
+    }
+
+    public boolean isDurationLimitExceeded() {
+        return recorder.isDurationLimitExceeded();
     }
 
     public void cancelRecording() {

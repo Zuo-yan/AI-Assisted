@@ -56,6 +56,12 @@ public final class AiClientEvents {
         } else if (!isDown && wasVoiceKeyDown) {
             wasVoiceKeyDown = false;
             AiVoiceClientManager.get().onKeyReleased();
+        } else if (isDown && wasVoiceKeyDown) {
+            if (AiVoiceClientManager.get().isDurationLimitExceeded()) {
+                wasVoiceKeyDown = false;
+                AiVoiceClientManager.get().onKeyReleased();
+                if (minecraft.player != null) { minecraft.player.sendOverlayMessage(net.minecraft.network.chat.Component.translatable("ai.ai_assisted.voice.max_duration")); }
+            }
         }
     }
 
