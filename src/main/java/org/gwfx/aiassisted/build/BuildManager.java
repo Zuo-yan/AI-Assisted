@@ -1,6 +1,7 @@
 package org.gwfx.aiassisted.build;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -109,7 +110,7 @@ public final class BuildManager {
         // 每个方块的注册表查询只做一次、后面每 tick 的推进循环里没有任何注册表访问
         Map<String, BlockState> states = new LinkedHashMap<>();
         for (String blockId : plan.materialCounts().keySet()) {
-            BlockState state = BuildExecutor.stateFor(blockId);
+            BlockState state = BuildExecutor.stateFor(blockId, toDirection(placement.facing()));
             if (state == null) {
                 return Component.translatable("ai.ai_assisted.build.unknown_block", blockId);
             }
@@ -144,6 +145,8 @@ public final class BuildManager {
         }
         UndoStore.Record<BlockState> found = record.get();
         ServerLevel level = player.level();
+        // 恢复要从新到旧（先拆最后放的）：UndoLog.reversed() 已经是倒序副本，
+        // 这里绝不能再倒一次 —— 二次反转会退回成"放置顺序"，与设计相反
         Job job = new Job(player.getUUID(), level, true, found.name(), null,
                 List.of(), found.log().reversed(), Map.of());
         this.jobs.put(player.getUUID(), job);
@@ -264,5 +267,17 @@ public final class BuildManager {
     private static int estimateSeconds(int blockCount, int blocksPerTick) {
         int perTick = Math.max(1, blocksPerTick);
         return Math.max(1, (int) Math.ceil(blockCount / (double) perTick / 20.0D));
+    }
+
+    private static Direction toDirection(BuildPlacement.Facing facing) {
+        if (facing == null) {
+            return Direction.NORTH;
+        }
+        return switch (facing) {
+            case NORTH -> Direction.NORTH;
+            case SOUTH -> Direction.SOUTH;
+            case WEST -> Direction.WEST;
+            case EAST -> Direction.EAST;
+        };
     }
 }

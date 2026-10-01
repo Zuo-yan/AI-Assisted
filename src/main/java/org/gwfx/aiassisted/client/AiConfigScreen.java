@@ -37,8 +37,15 @@ public class AiConfigScreen extends AiConfigFormScreen {
     /** 顶部三行：生效 Provider / Key 来源与文件 / 只读提示。 */
     private static final int HEADER_LINES = 3;
 
-    /** API Key 输入框：只写，每次重建控件都从空开始（服务端从不回传密钥）。 */
+    /** API Key 输入框：只写（服务端从不回传密钥，因此不存在"初值"可回填）。 */
     private EditBox apiKeyBox;
+
+    /**
+     * 密钥草稿：翻页/缩放窗口都会重建全部控件，不在这里暂存的话，
+     * 玩家刚输入的密钥会被一个新空框静默顶掉（留空=不改动，等于白输）。
+     * 只活在本屏内存里，关闭即丢弃；不会写进快照，也不会出现在日志。
+     */
+    private String apiKeyDraft = "";
 
     public AiConfigScreen() {
         super(Component.translatable("ai.ai_assisted.gui.title"));
@@ -87,9 +94,35 @@ public class AiConfigScreen extends AiConfigFormScreen {
     protected void buildBottomBar(int y) {
         Button apply = bottomButton("ai.ai_assisted.gui.apply", 0, y, this::submit);
         bottomButton("ai.ai_assisted.gui.done", 1, y, this::onClose);
-        bottomButton("ai.ai_assisted.gui.more", 2, y, this::openAdvanced);
+        // 「更多设置」右置、与左侧动作拉开：它是另一份表单的入口，不是"应用后继续"，
+        // 贴在一起容易让人以为左边的「应用」会顺带保存那边的改动
+        bottomButtonRight("ai.ai_assisted.gui.more", y, this::openAdvanced);
         // 只读时"应用"置灰：服务端一定会拒，与其让玩家点了收到一句报错，不如直接表明不可改
         apply.active = !readOnly();
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        drawMoreHint(graphics);
+    }
+
+    /**
+     * 「更多设置」按钮左侧的提示：那边是独立的另一份表单，本屏的「应用」不带它，
+     * 改完必须在那边单独点「应用」。与按钮同行、右对齐贴着按钮左缘；
+     * 空间只有「完成」到按钮之间的空档，文案要短，超宽按剩余宽度截断。
+     */
+    private void drawMoreHint(GuiGraphicsExtractor graphics) {
+        Component hint = Component.translatable("ai.ai_assisted.gui.more_hint");
+        int moreX = contentRight() - BUTTON_W;
+        int maxW = moreX - 6 - (bottomButtonX(1) + BUTTON_W + 8);
+        String text = this.font.plainSubstrByWidth(hint.getString(), Math.max(0, maxW)).strip();
+        if (text.isEmpty()) {
+            return;
+        }
+        // 与按钮行同一水平线（按钮 y = height-26，见基类 init），垂直居中于 20px 高的按钮
+        graphics.text(this.font, text, moreX - 6 - this.font.width(text),
+                this.height - 26 + 6, COLOR_DIM);
     }
 
     @Override
@@ -107,9 +140,8 @@ public class AiConfigScreen extends AiConfigFormScreen {
     }
 
     private AbstractWidget createApiKeyBox(int x, int y) {
-        // 密钥框永远从空开始：服务端从不回传密钥，因此不存在"初值"可填
-        EditBox box = boundBox(x, y, 256, "", text -> {
-        });
+        // 初值取草稿：控件重建（翻页/缩放）后玩家已输入的密钥不会丢
+        EditBox box = boundBox(x, y, 256, this.apiKeyDraft, text -> this.apiKeyDraft = text);
         // 掩码：按输入长度画等长的 *，屏幕上不出现密钥本体（防录屏/截图时顺手泄露）
         // 刻意不设 setHint：这一行下面是完整的灰字说明，输入框里再挂一条长提示会把框塞满
         box.addFormatter((text, offset) -> FormattedCharSequence.forward("*".repeat(text.length()), Style.EMPTY));

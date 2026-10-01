@@ -96,7 +96,8 @@ public final class McContextCollector {
                 village.status(),
                 now,
                 stale,
-                recentCommand);
+                recentCommand,
+                collectInstalledMods());
     }
 
     // ===== 附近实体 =====
@@ -324,5 +325,22 @@ public final class McContextCollector {
                 return new Section<>(fallback, true);
             }
         }
+    }
+
+    private static List<String> collectInstalledMods() {
+        List<String> list = new ArrayList<>();
+        try {
+            for (net.neoforged.neoforgespi.language.IModInfo mod : net.neoforged.fml.ModList.get().getMods()) {
+                String modId = mod.getModId();
+                if (modId == null || modId.isBlank()) continue;
+                if (modId.equals("minecraft") || modId.equals("neoforge") || modId.equals("framework")
+                        || modId.equals("ai_assisted") || modId.startsWith("curse") || modId.equals("mixin")) {
+                    continue;
+                }
+                list.add(modId);
+            }
+        } catch (Throwable ignored) {
+        }
+        return list;
     }
 }

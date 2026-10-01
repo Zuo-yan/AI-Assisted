@@ -359,4 +359,16 @@ class ContextRendererTest {
         }
         return count;
     }
+
+    @Test
+    void rendersInstalledModsWhenPresent() {
+        ContextSnapshot withMods = new ContextSnapshot(
+                "minecraft:overworld", 2, 0, 0, 0, 0L, false, false,
+                List.of(), List.of(), List.of(), null,
+                ContextSnapshot.VillageStatus.DISABLED, 0L, false, null,
+                List.of("twilightforest", "refurbished_furniture"));
+
+        String rendered = ContextRenderer.render(withMods);
+        assertTrue(rendered.contains("已加载第三方模组: twilightforest, refurbished_furniture"), rendered);
+    }
 }

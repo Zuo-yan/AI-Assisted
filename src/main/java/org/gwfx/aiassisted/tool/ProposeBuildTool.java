@@ -58,7 +58,7 @@ public final class ProposeBuildTool {
 
     public static ToolSpec spec() {
         return ToolSpec.builder(NAME,
-                        "设计并提议建造一座建筑。你只能**提议**：真正建造由玩家在游戏内用 /ai confirm 确认。"
+                        "设计并提议建造一座建筑。你只能**提议**：真正建造由玩家在游戏内用 /ai confirm 或语音说「确认」进行确认。"
                                 + "用分层字符画描述：layers 的每一项是一层（先地基后屋顶），层内的行用 ; 分隔；"
                                 + "所有行必须等长（=宽），每层行数相同（=深）。"
                                 + "palette 把字符映射到完整方块 id（形如 minecraft:oak_planks），空气写 .。"
@@ -146,7 +146,7 @@ public final class ProposeBuildTool {
         return ToolOutcome.ok("已提交待确认："
                 + "「" + pending.name() + "」" + blueprint.sizeText() + "，共 " + plan.blockCount() + " 块"
                 + "（已覆盖/占用的格子 " + coverage.checkedBlocks() + " 个）。"
-                + "\n**尚未开始建造**：玩家要在游戏内敲 /ai confirm 才会逐 tick 放置"
+                + "\n**尚未开始建造**：玩家要在游戏内敲 /ai confirm 或语音回复「确认」才会逐 tick 放置"
                 + "（" + (PendingBuildStore.TTL_MILLIS / 1000L) + " 秒内有效）。"
                 + "建造完成后玩家可用 /ai undo 撤销。"
                 + "\n如果玩家拒绝或提出修改，请按他的意思重新设计并再次调用本工具，不要反复提交同一张图。");

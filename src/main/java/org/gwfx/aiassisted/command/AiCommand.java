@@ -20,9 +20,11 @@ import org.gwfx.aiassisted.core.config.AiConfig;
 import org.gwfx.aiassisted.core.context.ContextRenderer;
 import org.gwfx.aiassisted.core.context.ContextSnapshot;
 import org.gwfx.aiassisted.core.llm.ProviderRegistry;
+import org.gwfx.aiassisted.core.memory.MemoryStore;
 import org.gwfx.aiassisted.secret.KeyStore;
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -92,6 +94,12 @@ public final class AiCommand {
                                 .executes(AiCommand::showGoal))
                         .then(Commands.literal("clear")
                                 .executes(AiCommand::clearGoal)))
+                .then(Commands.literal("memory")
+                        .executes(AiCommand::showMemory)
+                        .then(Commands.literal("show")
+                                .executes(AiCommand::showMemory))
+                        .then(Commands.literal("clear")
+                                .executes(AiCommand::clearMemory)))
                 .then(Commands.literal("help")
                         .executes(AiCommand::help))
                 .then(Commands.literal("status")
@@ -192,12 +200,65 @@ public final class AiCommand {
         return 1;
     }
 
+    // ===== 玩家可用：自己的长期记忆（T001-8）=====
+
+    /**
+     * {@code /ai memory}（等同 {@code /ai memory show}）：列出自己的长期记忆。
+     *
+     * <p>它是记忆的「可核对」出口：模型替你记了什么，玩家应当能不靠问 AI 就看到原文。
+     * 只读自己的、不读别人的 —— 与记忆的工具边界保持一致。默认展示条数沿用
+     * {@code ai.toolMaxResults}，与工具单次返回的上限同一量级。
+     */
+    private static int showMemory(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        AiConfig config = AiRuntime.get().config();
+        if (!config.memoryEnabled()) {
+            context.getSource().sendSuccess(
+                    () -> Component.translatable("ai.ai_assisted.memory.disabled"), false);
+            return 1;
+        }
+        List<MemoryStore.Entry> entries = AiRuntime.get().memories()
+                .search(player.getUUID(), "", config.toolMaxResults());
+        if (entries.isEmpty()) {
+            context.getSource().sendSuccess(
+                    () -> Component.translatable("ai.ai_assisted.memory.none"), false);
+            return 1;
+        }
+        context.getSource().sendSuccess(
+                () -> Component.translatable("ai.ai_assisted.memory.header"), false);
+        for (MemoryStore.Entry entry : entries) {
+            String id = "#" + entry.id();
+            String text = entry.text();
+            context.getSource().sendSuccess(() -> Component.translatable(
+                    "ai.ai_assisted.memory.entry", id, text), false);
+        }
+        return 1;
+    }
+
+    /** {@code /ai memory clear}：清空自己的全部长期记忆并删除记忆文件（隐私出口）。 */
+    private static int clearMemory(CommandContext<CommandSourceStack> context)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        AiConfig config = AiRuntime.get().config();
+        if (!config.memoryEnabled()) {
+            context.getSource().sendSuccess(
+                    () -> Component.translatable("ai.ai_assisted.memory.disabled"), false);
+            return 1;
+        }
+        AiRuntime.get().memories().clear(player.getUUID());
+        context.getSource().sendSuccess(
+                () -> Component.translatable("ai.ai_assisted.memory.cleared"), false);
+        return 1;
+    }
+
     private static int help(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         sendLine(source, "ai.ai_assisted.help.header");
         sendLine(source, "ai.ai_assisted.help.chat");
         sendLine(source, "ai.ai_assisted.help.clear");
         sendLine(source, "ai.ai_assisted.help.goal");
+        sendLine(source, "ai.ai_assisted.help.memory");
         sendLine(source, "ai.ai_assisted.help.whoami");
         sendLine(source, "ai.ai_assisted.help.confirm");
         sendLine(source, "ai.ai_assisted.help.cancel");
@@ -256,67 +317,12 @@ public final class AiCommand {
     private static int confirmPending(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        AiRuntime runtime = AiRuntime.get();
-        long now = System.currentTimeMillis();
-        AiConfig config = runtime.config();
-        int level = AiPermissions.highestLevelFor(player.permissions());
-
-        // ===== 先看有没有待确认的建造（T001-6）=====
-        // 建造比一条指令更"重"（会真的改一片世界），所以优先处理它。
-        Optional<PendingBuildStore.Pending> pendingBuild =
-                runtime.pendingBuilds().take(player.getUUID(), now);
-        if (pendingBuild.isPresent()) {
-            return startPendingBuild(context, runtime, config, level, pendingBuild.get());
-        }
-
-        Optional<PendingCommandStore.Pending> pending =
-                runtime.pendingCommands().take(player.getUUID(), now);
-        if (pending.isEmpty()) {
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.none"));
+        AiConfirmHandler.Result result = AiConfirmHandler.confirm(player);
+        if (!result.success()) {
+            context.getSource().sendFailure(result.chatMessage());
             return 0;
         }
-        PendingCommandStore.Pending record = pending.get();
-
-        if (!config.dangerousToolsEnabled()) {
-            audit(player, level, record.command(), "拒绝：危险级开关已关闭");
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.disabled"));
-            return 0;
-        }
-        if (level < config.toolAdminLevel()) {
-            audit(player, level, record.command(), "拒绝：权限不足");
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.low_level",
-                    level, config.toolAdminLevel()));
-            return 0;
-        }
-
-        MinecraftServer server = player.level().getServer();
-        if (server == null) {
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.error.no_server"));
-            return 0;
-        }
-
-        // 执行：用玩家自己的权限集 + 一个收集输出的 source。
-        // 与玩家自己敲这条指令走的是同一条 dispatcher 路径 —— 我们不绕过任何权限或保护插件。
-        CommandOutputCollector collector = new CommandOutputCollector();
-        CommandSourceStack source = player.createCommandSourceStack()
-                .withSource(collector)
-                .withPermission(player.permissions());
-        server.getCommands().performPrefixedCommand(source, record.command());
-
-        String output = collector.isEmpty()
-                ? Component.translatable("ai.ai_assisted.command.no_output").getString()
-                : collector.text();
-        // 存成上下文事实：确认后我们刻意不再自动调一次模型，结果只能靠下一轮对话带回去
-        runtime.lastCommands().record(player.getUUID(), record.command(), output, now);
-        audit(player, level, record.command(), "已执行");
-
-        context.getSource().sendSuccess(() -> Component.translatable(
-                "ai.ai_assisted.command.executed", record.command()), false);
-        // 换行在 MC 聊天里是硬换行（与 /ai debug context 的处理一致），整块一条消息发出去
-        context.getSource().sendSuccess(() -> Component.literal(output), false);
-        if (collector.truncated()) {
-            sendLine(context.getSource(), "ai.ai_assisted.command.truncated");
-        }
+        context.getSource().sendSuccess(result::chatMessage, false);
         return 1;
     }
 
@@ -324,20 +330,12 @@ public final class AiCommand {
     private static int cancelPending(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        long now = System.currentTimeMillis();
-        AiRuntime runtime = AiRuntime.get();
-
-        Optional<PendingBuildStore.Pending> build = runtime.pendingBuilds().take(player.getUUID(), now);
-        Optional<PendingCommandStore.Pending> pending = runtime.pendingCommands().take(player.getUUID(), now);
-        if (build.isEmpty() && pending.isEmpty()) {
-            context.getSource().sendFailure(Component.translatable("ai.ai_assisted.command.none"));
+        AiConfirmHandler.Result result = AiConfirmHandler.cancel(player);
+        if (!result.success()) {
+            context.getSource().sendFailure(result.chatMessage());
             return 0;
         }
-        build.ifPresent(found -> audit(player, AiPermissions.highestLevelFor(player.permissions()),
-                "建造「" + found.name() + "」", "玩家取消"));
-        pending.ifPresent(found -> audit(player, AiPermissions.highestLevelFor(player.permissions()),
-                found.command(), "玩家取消"));
-        context.getSource().sendSuccess(() -> Component.translatable("ai.ai_assisted.command.cancelled_all"), false);
+        context.getSource().sendSuccess(result::chatMessage, false);
         return 1;
     }
 

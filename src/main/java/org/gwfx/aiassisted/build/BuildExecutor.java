@@ -1,11 +1,13 @@
 package org.gwfx.aiassisted.build;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.gwfx.aiassisted.core.build.BuildPlacement;
 import org.gwfx.aiassisted.core.build.UndoLog;
@@ -36,11 +38,25 @@ final class BuildExecutor {
     private BuildExecutor() {
     }
 
-    /** 目标方块状态；id 在注册表里不存在时返回 null（调用方据此中止整场）。 */
+    /** 目标方块状态；支持自适应水平朝向（楼梯/家具等模组方块）。 */
+    static BlockState stateFor(String blockId, Direction facing) {
+        Block block = RegistryLookup.block(Identifier.tryParse(blockId)).orElse(null);
+        if (block == null) {
+            return null;
+        }
+        BlockState state = block.defaultBlockState();
+        if (facing != null) {
+            if (state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
+                state = state.setValue(BlockStateProperties.HORIZONTAL_FACING, facing);
+            } else if (state.hasProperty(BlockStateProperties.FACING)) {
+                state = state.setValue(BlockStateProperties.FACING, facing);
+            }
+        }
+        return state;
+    }
+
     static BlockState stateFor(String blockId) {
-        return RegistryLookup.block(Identifier.tryParse(blockId))
-                .map(Block::defaultBlockState)
-                .orElse(null);
+        return stateFor(blockId, null);
     }
 
     enum PlaceOutcome {

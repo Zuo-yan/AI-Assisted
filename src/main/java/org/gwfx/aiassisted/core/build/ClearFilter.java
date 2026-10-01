@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -32,7 +33,7 @@ public final class ClearFilter {
 
         String[] parts = trimmed.split("[,;]");
         for (String raw : parts) {
-            String token = raw.strip().toLowerCase();
+            String token = raw.strip().toLowerCase(Locale.ROOT);
             if (token.isEmpty()) {
                 continue;
             }
@@ -60,7 +61,7 @@ public final class ClearFilter {
         if (this.matchAll) {
             return true;
         }
-        String normalized = blockId.strip().toLowerCase();
+        String normalized = blockId.strip().toLowerCase(Locale.ROOT);
         if (this.exactIds.contains(normalized)) {
             return true;
         }

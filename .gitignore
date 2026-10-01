@@ -27,3 +27,6 @@ out/
 # 本地运行时与配置
 /config/
 *.log
+
+# ZCode session workspace
+.zcode/

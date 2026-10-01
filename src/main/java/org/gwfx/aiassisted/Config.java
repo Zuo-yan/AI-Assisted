@@ -154,6 +154,43 @@ public final class Config {
             .comment("单个玩家保留的历史字符总量上限，防止上下文膨胀")
             .defineInRange("ai.history.maxChars", 8000, 200, 200000);
 
+    // ===== AI 长期记忆（T001-8）=====
+    // 与 chat/ 下几个仅内存的 Store 不同：记忆的全部价值就在于跨会话，落盘是它的本体。
+    // 隐私边界：记忆是「每位玩家自己的」，模型只能读写发起对话那个人的记忆文件。
+
+    private static final ModConfigSpec.BooleanValue AI_MEMORY_ENABLED = BUILDER
+            .comment("""
+                    是否启用 AI 长期记忆。
+                    开启后每玩家一份记忆文件（config/zuoyanmod/memory/<uuid>.json），
+                    模型可用 memory_write / memory_search / memory_forget 自主维护，
+                    每轮对话把最近的记忆注入系统提示词。
+                    关闭后三样都不发生（工具不注册、不注入、不落盘），已存在的记忆文件保留不删。""")
+            .define("ai.memory.enabled", true);
+
+    private static final ModConfigSpec.IntValue AI_MEMORY_MAX_ENTRIES = BUILDER
+            .comment("单个玩家的记忆条数上限，超出时挤掉最旧的一条。文件在服务端本地，条数越大越占磁盘与注入预算")
+            .defineInRange("ai.memory.maxEntries", 100, 10, 500);
+
+    private static final ModConfigSpec.IntValue AI_MEMORY_INJECT_COUNT = BUILDER
+            .comment("""
+                    每轮对话注入系统提示词的最近记忆条数。这是每次请求的固定 token 开销；
+                    注入的是「最近」而不是「全部」，更早的记忆模型可以用 memory_search 查到。0 表示只存不注入。""")
+            .defineInRange("ai.memory.injectCount", 15, 0, 50);
+
+    // ===== 进服问候（AI「主动性」的第一刀）=====
+    // 与记忆共用一条隐私立场：问候数据只发给发起者本人的会话，不广播。
+
+    private static final ModConfigSpec.BooleanValue AI_GREETING_ENABLED = BUILDER
+            .comment("""
+                    玩家加入服务器时，是否让 AI 主动发一次简短问候（只发给该玩家）：
+                    叫出名字，并结合服务端刚采集的数据（在线人数、TPS、他的游玩时长等）做一句话概况。
+                    每次问候 = 1 次 LLM 调用；同一玩家的最小间隔由 ai.greeting.cooldownSeconds 控制。""")
+            .define("ai.greeting.enabled", true);
+
+    private static final ModConfigSpec.IntValue AI_GREETING_COOLDOWN_SECONDS = BUILDER
+            .comment("同一玩家两次进服问候的最小间隔（秒），防止反复重连刷问候。0 表示每次进服都问候")
+            .defineInRange("ai.greeting.cooldownSeconds", 600, 0, 86400);
+
     // ===== AI 工具调用（T001-5 第一刀：只读查询工具）=====
     // 工具让模型「按需主动查」，而不是把一切预先塞进上下文。
     // ⚠️ 开启后一次提问可能触发多次 LLM 往返，费用随之上升 —— 这是由 ai.toolMaxSteps 封顶的。
@@ -302,7 +339,12 @@ public final class Config {
             Map.entry("ai.context.structureCacheSeconds", AI_CONTEXT_STRUCTURE_CACHE_SECONDS),
             Map.entry("ai.context.inventoryTopN", AI_CONTEXT_INVENTORY_TOP_N),
             Map.entry("ai.history.maxMessages", AI_HISTORY_MAX_MESSAGES),
-            Map.entry("ai.history.maxChars", AI_HISTORY_MAX_CHARS));
+            Map.entry("ai.history.maxChars", AI_HISTORY_MAX_CHARS),
+            Map.entry("ai.memory.enabled", AI_MEMORY_ENABLED),
+            Map.entry("ai.memory.maxEntries", AI_MEMORY_MAX_ENTRIES),
+            Map.entry("ai.memory.injectCount", AI_MEMORY_INJECT_COUNT),
+            Map.entry("ai.greeting.enabled", AI_GREETING_ENABLED),
+            Map.entry("ai.greeting.cooldownSeconds", AI_GREETING_COOLDOWN_SECONDS));
 
     public static boolean logDirtBlock;
 
@@ -336,6 +378,15 @@ public final class Config {
     public static int aiContextInventoryTopN = 8;
     public static int aiHistoryMaxMessages = 20;
     public static int aiHistoryMaxChars = 8000;
+
+    // ===== AI 长期记忆（T001-8）=====
+    public static boolean aiMemoryEnabled = true;
+    public static int aiMemoryMaxEntries = 100;
+    public static int aiMemoryInjectCount = 15;
+
+    // ===== 进服问候 =====
+    public static boolean aiGreetingEnabled = true;
+    public static int aiGreetingCooldownSeconds = 600;
 
     // ===== AI 工具调用（T001-5）=====
     public static boolean aiToolCallingEnabled = true;
@@ -484,6 +535,11 @@ public final class Config {
         aiContextInventoryTopN = AI_CONTEXT_INVENTORY_TOP_N.get();
         aiHistoryMaxMessages = AI_HISTORY_MAX_MESSAGES.get();
         aiHistoryMaxChars = AI_HISTORY_MAX_CHARS.get();
+        aiMemoryEnabled = AI_MEMORY_ENABLED.get();
+        aiMemoryMaxEntries = AI_MEMORY_MAX_ENTRIES.get();
+        aiMemoryInjectCount = AI_MEMORY_INJECT_COUNT.get();
+        aiGreetingEnabled = AI_GREETING_ENABLED.get();
+        aiGreetingCooldownSeconds = AI_GREETING_COOLDOWN_SECONDS.get();
         aiToolCallingEnabled = AI_TOOL_CALLING_ENABLED.get();
         aiToolMaxSteps = AI_TOOL_MAX_STEPS.get();
         aiToolMaxResults = AI_TOOL_MAX_RESULTS.get();

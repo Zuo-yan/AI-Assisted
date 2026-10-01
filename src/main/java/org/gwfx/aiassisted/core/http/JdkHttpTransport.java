@@ -16,12 +16,13 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * 基于 JDK 内置 {@link HttpClient} 的异步传输实现。
  *
- * <p><b>零第三方依赖</b>：只用 {@code java.net.http} + 虚拟线程，避免为接入 AI 破坏
+ * <p><b>零第三方依赖</b>：只用 {@code java.net.http}，避免为接入 AI 破坏
  * 本仓库惯用的 {@code ./gradlew build --offline}。
  *
  * <p><b>重试策略</b>：只重试「网络层 IOException」与「5xx」。
@@ -41,6 +42,7 @@ public final class JdkHttpTransport implements HttpTransport {
 
     public JdkHttpTransport(Duration connectTimeout, int retryCount) {
         this.retryCount = Math.max(0, retryCount);
+        // 26.3 目标是 Java 21+：用虚拟线程承载异步请求 —— HTTP 客户端本身是阻塞式 IO，虚拟线程足够轻量
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.client = HttpClient.newBuilder()
                 .connectTimeout(connectTimeout)
@@ -57,6 +59,34 @@ public final class JdkHttpTransport implements HttpTransport {
                 .header("Content-Type", "application/json; charset=utf-8")
                 .header("Accept", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+        applyHeaders(builder, headers);
+        return attempt(builder.build(), timeout, 0);
+    }
+
+    @Override
+    public CompletableFuture<HttpResponseData> postMultipart(
+            URI uri, Map<String, String> headers, byte[] multipartBody, String boundary, Duration timeout) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                .timeout(timeout)
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody));
+        applyHeaders(builder, headers);
+        return attempt(builder.build(), timeout, 0);
+    }
+
+    @Override
+    public CompletableFuture<HttpResponseBytesData> postJsonBytes(
+            URI uri, Map<String, String> headers, String jsonBody, Duration timeout) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                .timeout(timeout)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+        applyHeaders(builder, headers);
+        return attemptBytes(builder.build(), timeout, 0);
+    }
+
+    private static void applyHeaders(HttpRequest.Builder builder, Map<String, String> headers) {
         if (headers != null) {
             headers.forEach((name, value) -> {
                 if (name != null && value != null && !value.isEmpty()) {
@@ -64,44 +94,61 @@ public final class JdkHttpTransport implements HttpTransport {
                 }
             });
         }
-        return attempt(builder.build(), timeout, 0);
     }
 
-    /**
-     * 第 {@code attempt} 次尝试（从 0 开始）。
-     *
-     * <p>重试走 {@code retryLater -> attempt(attempt + 1)} 这条独立分支，
-     * 不再回流进本层的 handle，因此不会出现「一次失败被两边各重试一遍」的指数放大。
-     */
     private CompletableFuture<HttpResponseData> attempt(HttpRequest request, Duration timeout, int attempt) {
         CompletableFuture<HttpResponseData> call;
         try {
             call = client.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                     .thenApply(response -> new HttpResponseData(response.statusCode(), response.body()));
         } catch (RuntimeException e) {
-            // sendAsync 同步抛出（例如 header 非法）时不会有 future，直接转成失败结果
-            return CompletableFuture.failedFuture(new LlmException("HTTP 请求构造失败：" + messageOf(e), e));
+            return CompletableFuture.failedFuture(constructionFailure(e));
         }
 
         return call.handle((data, error) -> {
             if (error == null) {
                 if (isRetryableStatus(data.statusCode()) && attempt < retryCount) {
-                    return retryLater(request, timeout, attempt);
+                    return retryLater(request, timeout, attempt).thenCompose(r -> attempt(r, timeout, attempt + 1));
                 }
                 return CompletableFuture.completedFuture(data);
             }
             if (attempt < retryCount && isRetryableError(error)) {
-                return retryLater(request, timeout, attempt);
+                return retryLater(request, timeout, attempt).thenCompose(r -> attempt(r, timeout, attempt + 1));
             }
             return CompletableFuture.<HttpResponseData>failedFuture(translate(error));
         }).thenCompose(inner -> inner);
     }
 
-    private CompletableFuture<HttpResponseData> retryLater(HttpRequest request, Duration timeout, int attempt) {
+    private CompletableFuture<HttpResponseBytesData> attemptBytes(HttpRequest request, Duration timeout, int attempt) {
+        CompletableFuture<HttpResponseBytesData> call;
+        try {
+            call = client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+                    .thenApply(response -> {
+                        String contentType = response.headers().firstValue("content-type").orElse("");
+                        return new HttpResponseBytesData(response.statusCode(), response.body(), contentType);
+                    });
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(constructionFailure(e));
+        }
+
+        return call.handle((data, error) -> {
+            if (error == null) {
+                if (isRetryableStatus(data.statusCode()) && attempt < retryCount) {
+                    return retryLater(request, timeout, attempt).thenCompose(r -> attemptBytes(r, timeout, attempt + 1));
+                }
+                return CompletableFuture.completedFuture(data);
+            }
+            if (attempt < retryCount && isRetryableError(error)) {
+                return retryLater(request, timeout, attempt).thenCompose(r -> attemptBytes(r, timeout, attempt + 1));
+            }
+            return CompletableFuture.<HttpResponseBytesData>failedFuture(translate(error));
+        }).thenCompose(inner -> inner);
+    }
+
+    private CompletableFuture<HttpRequest> retryLater(HttpRequest request, Duration timeout, int attempt) {
         long delayMillis = RETRY_BASE_DELAY_MILLIS * (attempt + 1L);
         return CompletableFuture
-                .supplyAsync(() -> null, CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS, executor))
-                .thenCompose(ignored -> attempt(request, timeout, attempt + 1));
+                .supplyAsync(() -> request, CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS, executor));
     }
 
     private static boolean isRetryableStatus(int statusCode) {
@@ -117,6 +164,9 @@ public final class JdkHttpTransport implements HttpTransport {
         if (cause instanceof LlmException llm) {
             return llm;
         }
+        if (cause instanceof RejectedExecutionException) {
+            return rejectedPool(cause);
+        }
         if (cause instanceof HttpTimeoutException) {
             return new LlmException("请求超时", cause);
         }
@@ -124,6 +174,18 @@ public final class JdkHttpTransport implements HttpTransport {
             return new LlmException("网络请求失败：" + messageOf(cause), cause);
         }
         return new LlmException("请求失败：" + messageOf(cause), cause);
+    }
+
+    private static LlmException rejectedPool(Throwable cause) {
+        return new LlmException(
+                "HTTP 线程池已关闭，无法发送请求（常见于刚退出上一个世界后复用旧连接）。重进世界或重启游戏即可恢复", cause);
+    }
+
+    private static LlmException constructionFailure(Throwable error) {
+        if (unwrap(error) instanceof RejectedExecutionException) {
+            return rejectedPool(error);
+        }
+        return new LlmException("HTTP 请求构造失败：" + messageOf(error), error);
     }
 
     private static Throwable unwrap(Throwable error) {
@@ -142,7 +204,6 @@ public final class JdkHttpTransport implements HttpTransport {
 
     @Override
     public void close() {
-        // 只关线程池、不调 client.close()：后者会等待在途请求收尾，可能拖住服务端停机。
         executor.shutdown();
     }
 }

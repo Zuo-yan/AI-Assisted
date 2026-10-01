@@ -45,7 +45,7 @@ public final class ProposeCommandTool {
         return ToolSpec.builder(NAME,
                         "提议执行一条服务器指令（例如 list、time query daytime）。"
                                 + "你无法直接执行它：调用本工具只会把指令提交给玩家，"
-                                + "由他在游戏内用 /ai confirm 确认后才真正运行。"
+                                + "由他在游戏内用 /ai confirm 或语音说「确认」后才真正运行。"
                                 + "指令必须是发起者本人权限范围内可执行的，且不要写前导斜杠。")
                 .stringParam("command", "要提议的指令原文，不含前导斜杠，例如 list", true)
                 .stringParam("reason", "为什么需要执行它。这句话会展示给玩家，帮助他判断要不要确认", false)
@@ -99,10 +99,10 @@ public final class ProposeCommandTool {
         notifyPlayer(player, stored);
 
         return ToolOutcome.ok("已提交待确认：/ " + command
-                + "\n它**尚未执行**。玩家在游戏内敲 /ai confirm 才会真正运行（60 秒内有效）。"
+                + "\n它**尚未执行**。玩家在游戏内敲 /ai confirm 或语音回复「确认」才会真正运行（60 秒内有效）。"
                 + "执行结果不会自动回传给你，也不会自动产生新的调用 —— "
                 + "玩家下次提问时会在上下文里看到它。"
-                + "\n如果玩家拒绝，请尊重他的决定，不要反复提议同一条指令。");
+                + "\n如果玩家拒绝，请尊重他的决定，不要反复提议同一条指令。转告玩家时，必须提醒他可以输入 /ai confirm 或通过语音回复「确认」进行执行。");
     }
 
     /**

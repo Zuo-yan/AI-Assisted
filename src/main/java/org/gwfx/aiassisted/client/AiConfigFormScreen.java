@@ -55,7 +55,8 @@ abstract class AiConfigFormScreen extends Screen {
     private static final int LABEL_W = 78;
     /** 控件宽度：一列里去掉标签后的剩余宽度。 */
     private static final int CONTROL_W = COL_W - LABEL_W - 4;
-    private static final int BUTTON_W = 100;
+    /** 底部按钮宽度；子类（如提示文字的定位）也会用到。 */
+    protected static final int BUTTON_W = 100;
     private static final int BUTTON_H = 20;
     private static final int NAV_BUTTON_W = 20;
     /** 每项说明最多几行；两行约 45 个汉字，够写清"这是什么、调大调小会怎样"。 */
@@ -63,9 +64,9 @@ abstract class AiConfigFormScreen extends Screen {
     /** 控件高度（输入框/按钮）。略小于行高，留出一点呼吸空间。 */
     private static final int CONTROL_H = 14;
     /** 项与项之间的留白，避免说明和下一项的控件贴在一起。 */
-    private static final int ITEM_GAP = 4;
+    private static final int ITEM_GAP = 5;
     /** 底部留给状态行与按钮的高度（与原布局一致）。 */
-    private static final int BOTTOM_RESERVED = 74;
+    private static final int BOTTOM_RESERVED = 48;
 
     private static final int COLOR_TITLE = 0xFFFFFFFF;
     protected static final int COLOR_LABEL = 0xFFE0E0E0;
@@ -98,6 +99,13 @@ abstract class AiConfigFormScreen extends Screen {
     private Button testButton;
     private boolean testingConnection;
     private AiConfigClientData.TestResult lastTestResult;
+    /**
+     * 测试连接的客户端看门狗：约 10 秒没等到结果包就就地判超时。
+     * 服务端 HTTP 请求自身也是 10 秒超时，但 DNS 卡死、结果包丢失这类情况
+     * 服务端永远回不了话，客户端不能陪着把「测试中…」挂死。
+     */
+    private static final int TEST_TIMEOUT_TICKS = 10 * 20;
+    private int testTimeoutTicks;
     private Component status = Component.empty();
 
     // ===== 布局（init 与渲染共用同一份坐标）=====
@@ -187,7 +195,13 @@ abstract class AiConfigFormScreen extends Screen {
             pageRows.get(i).factory().create(rowX(i), rowY(i));
         }
 
-        AiConfigClientData.setTestResultListener(this::onTestResult);
+        // 结果包只在测试进行中被接受：超时后迟到的那份真实结果直接丢弃，
+        // 免得它莫名顶掉超时提示，或被误当成下一次测试的结果
+        AiConfigClientData.setTestResultListener(result -> {
+            if (this.testingConnection) {
+                onTestResult(result);
+            }
+        });
         buildPageNav();
         buildBottomBar(this.height - 26);
 
@@ -209,6 +223,11 @@ abstract class AiConfigFormScreen extends Screen {
         this.controlH = CONTROL_H;
         this.descLines = DESC_LINES;
         int rowsPerColumn = available / itemHeight(this.descLines);
+        // 容差优化：若 4 行所需高度与 available 差距在 12px 以内（常见于 1080p Scale 4 下的微小四舍五入差异），
+        // 允许紧凑排入 4 行（即每页 8 个槽位），避免让仅有 7~8 个项的分组孤立拆出单项新页
+        if (rowsPerColumn == 3 && available >= 4 * itemHeight(this.descLines) - 12) {
+            rowsPerColumn = 4;
+        }
         if (rowsPerColumn < 2) {
             this.descLines = 1;
             rowsPerColumn = available / itemHeight(this.descLines);
@@ -302,17 +321,27 @@ abstract class AiConfigFormScreen extends Screen {
         rebuildWidgets();
     }
 
+    private int currentLeftCount() {
+        int total = currentRows().size();
+        return Math.max(1, Math.min(this.perColumn, (total + 1) / 2));
+    }
+
+    private boolean isLeftColumn(int index) {
+        return index < currentLeftCount();
+    }
+
     private int rowX(int index) {
-        return (index < this.perColumn ? this.leftX : this.rightX) + LABEL_W + 4;
+        return (isLeftColumn(index) ? this.leftX : this.rightX) + LABEL_W + 4;
     }
 
     /** 标签的 x：与控件同列，但贴着列首（控件让出 LABEL_W 的宽度给标签）。 */
     private int labelX(int index) {
-        return index < this.perColumn ? this.leftX : this.rightX;
+        return isLeftColumn(index) ? this.leftX : this.rightX;
     }
 
     private int rowY(int index) {
-        int row = index < this.perColumn ? index : index - this.perColumn;
+        int leftCount = currentLeftCount();
+        int row = isLeftColumn(index) ? index : index - leftCount;
         return this.rowsTop + row * itemHeight(this.descLines);
     }
 
@@ -323,6 +352,9 @@ abstract class AiConfigFormScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        if (this.testingConnection && --this.testTimeoutTicks <= 0) {
+            onTestTimeout();
+        }
         AiConfigSnapshot current = AiConfigClientData.snapshot();
         if (current != this.appliedSnapshot) {
             onSnapshotChanged(current);
@@ -471,7 +503,7 @@ abstract class AiConfigFormScreen extends Screen {
 
     private void buildPageNav() {
         int navY = 4;
-        int rightEdge = this.rightX + COL_W;
+        int rightEdge = contentRight();
         int testX;
         if (this.pages.size() > 1) {
             addRenderableWidget(Button.builder(Component.literal("<"), b -> turnPage(-1))
@@ -497,6 +529,7 @@ abstract class AiConfigFormScreen extends Screen {
 
     private void testConnection() {
         this.testingConnection = true;
+        this.testTimeoutTicks = TEST_TIMEOUT_TICKS;
         if (this.testButton != null) {
             this.testButton.active = false;
             this.testButton.setMessage(Component.translatable("ai.ai_assisted.gui.testing"));
@@ -515,6 +548,7 @@ abstract class AiConfigFormScreen extends Screen {
 
     private void onTestResult(AiConfigClientData.TestResult result) {
         this.testingConnection = false;
+        this.testTimeoutTicks = 0;
         this.lastTestResult = result;
         if (this.testButton != null) {
             this.testButton.active = !this.readOnly;
@@ -529,6 +563,17 @@ abstract class AiConfigFormScreen extends Screen {
         }
     }
 
+    /** 测试超时：就地下结论、归还按钮，不让「测试中…」永远挂着。 */
+    private void onTestTimeout() {
+        this.testingConnection = false;
+        this.testTimeoutTicks = 0;
+        if (this.testButton != null) {
+            this.testButton.active = !this.readOnly;
+            this.testButton.setMessage(Component.translatable("ai.ai_assisted.gui.test_connection"));
+        }
+        this.status = Component.translatable("ai.ai_assisted.gui.test_timeout");
+    }
+
 
     /** 页码文字与翻页按钮一起画在右上角。 */
     private void drawPageIndicator(GuiGraphicsExtractor graphics) {
@@ -536,7 +581,7 @@ abstract class AiConfigFormScreen extends Screen {
             return;
         }
         Component text = Component.translatable("ai.ai_assisted.gui.page", this.pageIndex + 1, this.pages.size());
-        int rightEdge = this.rightX + COL_W;
+        int rightEdge = contentRight();
         graphics.text(this.font, text,
                 rightEdge - NAV_BUTTON_W * 2 - 8 - this.font.width(text), 9, COLOR_DIM);
     }
@@ -602,11 +647,22 @@ abstract class AiConfigFormScreen extends Screen {
     }
 
     private Button providerButton(int x, int y) {
-        return Button.builder(Component.literal(currentProvider()), b -> {
+        Button button = Button.builder(Component.literal(currentProvider()), b -> {
             String next = nextProvider(currentProvider());
             setForm(AiConfigEdits.KEY_PROVIDER, next);
             b.setMessage(Component.literal(next));
+            b.setTooltip(Tooltip.create(providerTooltip(next)));
         }).bounds(x, y, CONTROL_W, this.controlH).build();
+        button.setTooltip(Tooltip.create(providerTooltip(currentProvider())));
+        return button;
+    }
+
+    /**
+     * 协议名看不出报文差异，逐条说明放悬浮提示：不受字段说明「最多两行截断」的限制，
+     * 键名直接拼 provider id（{@code desc.openai-compatible} 等），新增协议只需补一条语言条目。
+     */
+    private static Component providerTooltip(String providerId) {
+        return Component.translatable("ai.ai_assisted.gui.provider.desc." + providerId);
     }
 
     private String currentProvider() {
@@ -635,6 +691,17 @@ abstract class AiConfigFormScreen extends Screen {
     /** 底部按钮的 x：从左往右第 index 个（0 起）。 */
     protected int bottomButtonX(int index) {
         return this.leftX + index * (BUTTON_W + 8);
+    }
+
+    /** 内容区右缘（右列控件的右边界）；右上角翻页与右对齐的底部按钮都以它为锚。 */
+    protected int contentRight() {
+        return this.rightX + COL_W;
+    }
+
+    /** 右对齐的底部按钮：x 贴内容区右缘，放「更多设置」这类次要入口。 */
+    protected Button bottomButtonRight(String labelKey, int y, Runnable action) {
+        return addRenderableWidget(Button.builder(Component.translatable(labelKey), b -> action.run())
+                .bounds(contentRight() - BUTTON_W, y, BUTTON_W, BUTTON_H).build());
     }
 
     /** 控件宽度（额外行自建控件时用）。 */

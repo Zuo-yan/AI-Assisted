@@ -7,6 +7,7 @@ import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.gwfx.aiassisted.AiAssistedMod;
@@ -23,7 +24,10 @@ import org.gwfx.aiassisted.core.config.AiConfig;
  * <p>事件与职责：
  * <ul>
  *   <li>{@code RegisterCommandsEvent} → 注册 {@code /ai}，并顺带初始化运行时（把问题暴露在启动期）</li>
- *   <li>{@code ServerTickEvent.Post} → 推进分页队列、处理挂起的配置热重载</li>
+ *   <li>{@code ServerStartedEvent} → 重建 HTTP 传输层（单人模式退出世界会关掉它，重进必须救活）</li>
+ *   <li>{@code ServerTickEvent.Post} → 推进分页队列、处理挂起的配置热重载、
+ *       推进建造/撤销作业</li>
+ *   <li>{@code PlayerEvent.PlayerLoggedInEvent} → 进服问候（守卫不满足则静默跳过）</li>
  *   <li>{@code PlayerEvent.PlayerLoggedOutEvent} → 回收该玩家的会话与待发分页</li>
  *   <li>{@code ModConfigEvent} → 请求热重载（延迟到下一 tick，避开与 Config.onLoad 的顺序竞态）</li>
  *   <li>{@code ServerStoppingEvent} → 关闭 HTTP 线程池</li>
@@ -51,6 +55,24 @@ public final class AiServerEvents {
             runtime.tick();
             // 建造/撤销作业分 tick 推进（T001-6）：预算每 tick 从配置现读，改配置下一 tick 就生效
             runtime.builds().tick(event.getServer(), runtime.config().buildBlocksPerTick());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        // 单人模式的生命周期陷阱：退出世界会触发 ServerStoppingEvent → shutdown() 关闭
+        // HTTP 线程池，而 AiRuntime 是跨世界存活的单例 —— 不在这里重建的话，
+        // 重进世界后所有 AI 调用都会撞上 RejectedExecutionException（"Task …AsyncSupply rejected"）
+        if (AiRuntime.isInitialized()) {
+            AiRuntime.get().reload();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (AiRuntime.isInitialized() && event.getEntity() instanceof ServerPlayer player) {
+            // 主动问候：内部自带开关/冷却/并发守卫，不满足就静默跳过
+            AiRuntime.get().greetOnJoin(player);
         }
     }
 

@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.state.BlockState;
 import org.gwfx.aiassisted.AiPermissions;
+import org.gwfx.aiassisted.build.McTerrainProbe;
 import org.gwfx.aiassisted.build.PendingBuildStore;
 import org.gwfx.aiassisted.build.analysis.BuildingClusterDetector;
 import org.gwfx.aiassisted.chat.PendingCommandStore;
@@ -15,6 +16,7 @@ import org.gwfx.aiassisted.core.agent.ToolOutcome;
 import org.gwfx.aiassisted.core.build.BuildPlacement;
 import org.gwfx.aiassisted.core.build.BuildPlan;
 import org.gwfx.aiassisted.core.build.ClearFilter;
+import org.gwfx.aiassisted.core.build.CoveragePlanner;
 import org.gwfx.aiassisted.core.config.AiConfig;
 import org.gwfx.aiassisted.core.llm.ToolSpec;
 import org.gwfx.aiassisted.platform.RegistryLookup;
@@ -42,6 +44,7 @@ public final class ProposeClearTool {
         return ToolSpec.builder(NAME,
                         "提议清除或替换指定范围内的方块。你只能**提议**：真正操作由玩家在游戏内输入 /ai confirm 确认。"
                                 + "支持定向清除面前建筑内的方块，或清除玩家周围的某种方块（如杂草、泥土、圆石、水源等）。"
+                                + "清除人造方块（圆石/木板等）需要服务器开启「放权建筑操作」，否则本工具会拒绝。"
                                 + "replace_with 默认为 minecraft:air（即直接清除）。")
                 .stringParam("scope", "范围模式：targeted_building（面前所指的建筑，推荐）或 around_player（玩家周围）", true)
                 .stringParam("filter_blocks", "匹配的方块，支持逗号分隔或别名，例如 minecraft:cobblestone, dirt, leaves，或 all", true)
@@ -143,6 +146,21 @@ public final class ProposeClearTool {
         String planName = "方块" + (isRemove ? "清除" : "置换") + "（" + targetPositions.size() + " 块）";
 
         BuildPlan plan = new BuildPlan(planName, 0, 0, 0, localBlocks, Map.of(replaceWith, localBlocks.size()));
+
+        // 覆盖检查与 /ai confirm 走的是同一套：清除/替换人造方块需要「放权建筑操作」。
+        // 提前在这里拦下，玩家才不会等到确认时才收到一句莫名的"目标位置存在阻挡方块"
+        CoveragePlanner.Result coverage = CoveragePlanner.check(plan, BuildPlacement.absolute(),
+                new McTerrainProbe(levelObj), config.buildAllowNonNaturalTerrain());
+        if (coverage.unloadedChunk()) {
+            return ToolOutcome.error("目标区域的区块没有加载（你可能站在区块边缘），请让玩家走近一点再试。");
+        }
+        if (!coverage.ok() && coverage.firstViolation() != null) {
+            CoveragePlanner.Violation violation = coverage.firstViolation();
+            return ToolOutcome.error("清除/替换会改动非自然方块（人造建筑），当前未开启「放权建筑操作」，已拒绝：位置 "
+                    + "(" + violation.x() + " " + violation.y() + " " + violation.z() + ") 上是 "
+                    + violation.currentBlockId() + "。请让玩家在 AI 配置界面的「更多设置 · AI 建造」中开启"
+                    + "「放权建筑操作」（ai.build.allowNonNaturalTerrain），或只清除自然方块（杂草/泥土/树叶等）。");
+        }
 
         pendingBuilds.propose(player.getUUID(), plan, BuildPlacement.absolute(), System.currentTimeMillis());
         pendingCommands.clear(player.getUUID());

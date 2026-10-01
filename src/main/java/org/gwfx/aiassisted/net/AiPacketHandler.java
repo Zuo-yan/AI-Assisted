@@ -57,7 +57,14 @@ public final class AiPacketHandler {
                 AiTestConnectionResultPacket::handle
         );
 
-        LOGGER.info("[AiAssisted-Network] Successfully registered payload handlers");
+        // AI 语音交互（STT 上行 与 TTS 下行）
+        registrar.playToServer(
+                AiVoiceInputPacket.TYPE,
+                AiVoiceInputPacket.STREAM_CODEC,
+                AiVoiceInputPacket::handle
+        );
+
+        LOGGER.info("[AiAssisted-Network] Successfully registered payload handlers (including voice channels)");
     }
 
     public static void sendRequestAiConfig() {
@@ -78,6 +85,17 @@ public final class AiPacketHandler {
             payload = "{}";
         }
         sendToServer(new AiConfigUpdatePacket(payload));
+    }
+
+    public static void sendVoiceInput(byte[] audioData) {
+        sendVoiceInput(audioData, "");
+    }
+
+    public static void sendVoiceInput(byte[] audioData, String recognizedText) {
+        byte[] safeAudio = audioData == null ? new byte[0] : audioData;
+        if (safeAudio.length <= AiVoiceInputPacket.MAX_AUDIO_BYTES) {
+            sendToServer(new AiVoiceInputPacket(safeAudio, recognizedText));
+        }
     }
 
     private static void sendToServer(CustomPacketPayload payload) {

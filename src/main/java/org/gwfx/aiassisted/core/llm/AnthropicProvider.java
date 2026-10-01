@@ -170,7 +170,7 @@ public final class AnthropicProvider implements LlmProvider {
 
     static ChatResponse parseResponse(HttpResponseData response) {
         if (response.statusCode() >= 400) {
-            throw new LlmException("Anthropic API 错误 (HTTP " + response.statusCode() + ")" + snippetOf(response.body()));
+            throw HttpErrors.fromResponse(response);
         }
 
         JsonObject root;

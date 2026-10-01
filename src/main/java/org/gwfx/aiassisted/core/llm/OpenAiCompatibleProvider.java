@@ -137,8 +137,7 @@ public final class OpenAiCompatibleProvider implements LlmProvider {
     /** 解析响应。非 2xx 抛 {@link LlmException}（带状态码），格式错误也抛同类异常。 */
     static ChatResponse parseResponse(HttpResponseData response) {
         if (!response.isSuccess()) {
-            throw LlmException.http(response.statusCode(),
-                    "HTTP " + response.statusCode() + snippetOf(response.body()));
+            throw HttpErrors.fromResponse(response);
         }
 
         JsonObject root;
@@ -152,29 +151,38 @@ public final class OpenAiCompatibleProvider implements LlmProvider {
             throw new LlmException("响应不是合法 JSON：" + snippetOf(response.body()), e);
         }
 
-        JsonArray choices = root.getAsJsonArray("choices");
-        if (choices == null || choices.isEmpty()) {
-            throw new LlmException("响应里没有 choices：" + snippetOf(response.body()));
+        // 报文"形状"不符合预期时（choices 不是数组、usage 不是对象等），Gson 的强转会抛
+        // ClassCastException / UnsupportedOperationException。中转站返回畸形体是常态，
+        // 上层只认 LlmException，这里统一收敛，保证错误话术可读
+        try {
+            JsonArray choices = root.getAsJsonArray("choices");
+            if (choices == null || choices.isEmpty()) {
+                throw new LlmException("响应里没有 choices：" + snippetOf(response.body()));
+            }
+
+            JsonObject firstChoice = choices.get(0).getAsJsonObject();
+            JsonObject message = firstChoice.getAsJsonObject("message");
+            if (message == null) {
+                throw new LlmException("响应里没有 choices[0].message：" + snippetOf(response.body()));
+            }
+
+            String text = asString(message.get("content"));
+            String finishReason = asNullableString(firstChoice.get("finish_reason"));
+
+            int promptTokens = UNKNOWN_TOKENS;
+            int completionTokens = UNKNOWN_TOKENS;
+            JsonObject usage = root.getAsJsonObject("usage");
+            if (usage != null) {
+                promptTokens = asInt(usage.get("prompt_tokens"), UNKNOWN_TOKENS);
+                completionTokens = asInt(usage.get("completion_tokens"), UNKNOWN_TOKENS);
+            }
+
+            return new ChatResponse(text, promptTokens, completionTokens, finishReason, parseToolCalls(message));
+        } catch (LlmException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new LlmException("响应格式不符合预期：" + snippetOf(response.body()), e);
         }
-
-        JsonObject firstChoice = choices.get(0).getAsJsonObject();
-        JsonObject message = firstChoice.getAsJsonObject("message");
-        if (message == null) {
-            throw new LlmException("响应里没有 choices[0].message：" + snippetOf(response.body()));
-        }
-
-        String text = asString(message.get("content"));
-        String finishReason = asNullableString(firstChoice.get("finish_reason"));
-
-        int promptTokens = UNKNOWN_TOKENS;
-        int completionTokens = UNKNOWN_TOKENS;
-        JsonObject usage = root.getAsJsonObject("usage");
-        if (usage != null) {
-            promptTokens = asInt(usage.get("prompt_tokens"), UNKNOWN_TOKENS);
-            completionTokens = asInt(usage.get("completion_tokens"), UNKNOWN_TOKENS);
-        }
-
-        return new ChatResponse(text, promptTokens, completionTokens, finishReason, parseToolCalls(message));
     }
 
     /**

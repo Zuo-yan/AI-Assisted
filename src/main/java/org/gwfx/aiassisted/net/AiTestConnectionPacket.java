@@ -6,6 +6,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -46,6 +47,8 @@ public record AiTestConnectionPacket(String json) implements CustomPacketPayload
             if (!(context.player() instanceof ServerPlayer player)) {
                 return;
             }
+            // 异步回调里不能碰世界：server 在这里（主线程）先捕获
+            MinecraftServer server = player.level().getServer();
 
             if (!AiPermissions.allows(player)) {
                 PacketDistributor.sendToPlayer(player,
@@ -86,19 +89,23 @@ public record AiTestConnectionPacket(String json) implements CustomPacketPayload
                     baseUrl, apiKey, Duration.ofSeconds(10), 0);
             LlmProvider testProvider = registry.create(provider, settings);
 
+            // 这是连通性测试，不是正式对话，参数按「最容易被各家接受」取：
+            // temperature 给 1.0（默认值）—— 0.0 会被推理系模型（o 系 / gpt-5 系）整单拒收；
+            // 上限给 32 —— 太小（如 5）低于 Responses 协议 max_output_tokens 的下限 16，
+            // 还没走到网络那一步就 400 了，中转站玩家会误以为「接不上」
             ChatRequest testRequest = new ChatRequest(
                     model,
                     "",
                     List.of(ChatMessage.user("ping")),
-                    0.0D,
-                    5
+                    1.0D,
+                    32
             );
 
             long startTime = System.currentTimeMillis();
             testProvider.chat(testRequest)
                     .thenAccept(response -> {
                         long latency = System.currentTimeMillis() - startTime;
-                        PacketDistributor.sendToPlayer(player,
+                        sendResult(server, player,
                                 new AiTestConnectionResultPacket(true, (int) latency, "连接成功 (" + latency + "ms)"));
                     })
                     .exceptionally(ex -> {
@@ -106,10 +113,23 @@ public record AiTestConnectionPacket(String json) implements CustomPacketPayload
                         Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                         String msg = cause.getMessage() != null ? cause.getMessage() : "未知网络错误";
                         String redactedMsg = AiRuntime.get().redactor().redact(msg);
-                        PacketDistributor.sendToPlayer(player,
+                        sendResult(server, player,
                                 new AiTestConnectionResultPacket(false, (int) latency, redactedMsg));
                         return null;
                     });
+        });
+    }
+
+    /** 结果包必须回服务端主线程发：网络回调在传输线程，且玩家可能已退出/切世界。 */
+    private static void sendResult(MinecraftServer server, ServerPlayer player, AiTestConnectionResultPacket result) {
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> {
+            if (player.hasDisconnected()) {
+                return;
+            }
+            PacketDistributor.sendToPlayer(player, result);
         });
     }
 }
