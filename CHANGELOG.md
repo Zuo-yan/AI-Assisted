@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.6.1-neoforge-1.21.1 — 2026-10-15
+
+- 将 NeoForge 构建版本和必需依赖下限调整为 21.1.249，兼容 SkyExplorer 服务器使用的 NeoForge 21.1.249。
+- 构建和启动验证均使用 NeoForge 21.1.249。
+
 ## 1.6-neoforge-1.21.1 — 2026-10-15
 
 - 在独立分支适配 Minecraft 1.21.1、NeoForge 21.1.262、Java 21。

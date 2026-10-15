@@ -1,6 +1,6 @@
 # AI 助手（内置第三方大模型接入）
 
-状态：**已实装** · 2026-10-15 · 环境：NeoForge 21.1.262 / Minecraft 1.21.1 / Java 21 · modid `ai_assisted` · 版本 `1.6-neoforge-1.21.1`
+状态：**已实装** · 2026-10-15 · 环境：NeoForge 21.1.249+ / Minecraft 1.21.1 / Java 21 · modid `ai_assisted` · 版本 `1.6.1-neoforge-1.21.1`
 
 ---
 
