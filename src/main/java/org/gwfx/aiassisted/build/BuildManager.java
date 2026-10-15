@@ -117,12 +117,12 @@ public final class BuildManager {
             states.put(blockId, state);
         }
 
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         Job job = new Job(player.getUUID(), level, false, plan.name(), placement,
                 plan.blocks(), List.of(), states);
         this.jobs.put(player.getUUID(), job);
 
-        LOGGER.info("[AI][建造] {} 开始建造「{}」：{} 块", player.getGameProfile().name(),
+        LOGGER.info("[AI][建造] {} 开始建造「{}」：{} 块", player.getGameProfile().getName(),
                 job.name, plan.blockCount());
         return Component.translatable("ai.ai_assisted.build.started",
                 job.name, plan.blockCount(), estimateSeconds(plan.blockCount(), blocksPerTick));
@@ -144,14 +144,14 @@ public final class BuildManager {
             return Component.translatable("ai.ai_assisted.build.undo_none");
         }
         UndoStore.Record<BlockState> found = record.get();
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         // 恢复要从新到旧（先拆最后放的）：UndoLog.reversed() 已经是倒序副本，
         // 这里绝不能再倒一次 —— 二次反转会退回成"放置顺序"，与设计相反
         Job job = new Job(player.getUUID(), level, true, found.name(), null,
                 List.of(), found.log().reversed(), Map.of());
         this.jobs.put(player.getUUID(), job);
 
-        LOGGER.info("[AI][建造] {} 开始撤销「{}」：{} 格", player.getGameProfile().name(),
+        LOGGER.info("[AI][建造] {} 开始撤销「{}」：{} 格", player.getGameProfile().getName(),
                 job.name, job.total());
         return Component.translatable("ai.ai_assisted.build.undo_started", job.name, job.total());
     }
@@ -254,7 +254,7 @@ public final class BuildManager {
             return;
         }
         player.sendSystemMessage(Component.translatable("ai.ai_assisted.build.done", job.name, job.touched));
-        LOGGER.info("[AI][建造] {} 建造「{}」完成：{} 格", player.getGameProfile().name(),
+        LOGGER.info("[AI][建造] {} 建造「{}」完成：{} 格", player.getGameProfile().getName(),
                 job.name, job.touched);
     }
 

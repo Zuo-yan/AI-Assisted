@@ -59,7 +59,7 @@ public final class ProposeDecorateTool {
         if (!config.buildEnabled()) {
             return ToolOutcome.error("本服务器未开启「AI 建造」（ai.build.enabled=false），你无法提议建筑装饰。");
         }
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
         if (level < config.toolAdminLevel()) {
             return ToolOutcome.error("你的权限等级不足（需要管理等级 " + config.toolAdminLevel() + "），无法提议建筑装饰。");
         }
@@ -82,7 +82,7 @@ public final class ProposeDecorateTool {
         }
 
         BuildingClusterDetector.BuildingStructure building = buildingOpt.get();
-        ServerLevel levelObj = player.level();
+        ServerLevel levelObj = player.serverLevel();
         Random random = new Random(building.seedPos().hashCode());
         List<BuildPlan.LocalBlock> placements = new ArrayList<>();
         Map<String, Integer> materialCounts = new LinkedHashMap<>();

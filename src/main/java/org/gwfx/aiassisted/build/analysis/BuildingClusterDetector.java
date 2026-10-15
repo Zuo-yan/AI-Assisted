@@ -2,7 +2,7 @@ package org.gwfx.aiassisted.build.analysis;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.state.BlockState;
@@ -68,7 +68,7 @@ public final class BuildingClusterDetector {
         HitResult hit = player.pick(maxDistance, 0.0F, false);
         if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
             BlockPos pos = blockHit.getBlockPos();
-            BlockState state = player.level().getBlockState(pos);
+            BlockState state = player.serverLevel().getBlockState(pos);
             if (!state.isAir()) {
                 return Optional.of(pos);
             }
@@ -82,7 +82,7 @@ public final class BuildingClusterDetector {
         if (seedOpt.isEmpty()) {
             return Optional.empty();
         }
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         return detectCluster(level, seedOpt.get(), maxBlocks);
     }
 

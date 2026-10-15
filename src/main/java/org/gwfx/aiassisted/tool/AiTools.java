@@ -41,7 +41,7 @@ public final class AiTools {
         registry.register(SearchAvailableBlocksTool.spec(), SearchAvailableBlocksTool::invoke);
         registry.register(SearchEntitiesTool.spec(), args -> SearchEntitiesTool.invoke(player, config, args));
         registry.register(SearchRecipesTool.spec(),
-                args -> SearchRecipesTool.invoke(player.level(), recipeIndex, config, args));
+                args -> SearchRecipesTool.invoke(player.serverLevel(), recipeIndex, config, args));
         registry.register(PlayerStatusTool.spec(), args -> PlayerStatusTool.invoke(player, config, args));
         registry.register(SearchInventoryTool.spec(), args -> SearchInventoryTool.invoke(player, config, args));
         registry.register(SearchContainersTool.spec(), args -> SearchContainersTool.invoke(player, config, args));
@@ -62,7 +62,7 @@ public final class AiTools {
         // 为什么不是"注册了再在实现里拒绝"：不注册意味着模型连工具名都看不到，
         // 它不会去尝试一个不存在的工具，也就不会在回答里承诺自己做不到的事。
         // （实现里仍各有一次等级复查，那是第二道保险，不是唯一门禁。）
-        if (AiPermissions.highestLevelFor(player.permissions()) >= config.toolAdminLevel()) {
+        if (AiPermissions.highestLevelFor(player) >= config.toolAdminLevel()) {
             registry.register(ServerInfoTool.spec(), args -> ServerInfoTool.invoke(player, config, args));
             // propose_command 是危险级：除等级外还要总开关打开才注册（默认关闭）
             if (config.dangerousToolsEnabled()) {

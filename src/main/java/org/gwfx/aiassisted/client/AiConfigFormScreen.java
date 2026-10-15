@@ -1,7 +1,7 @@
 package org.gwfx.aiassisted.client;
 
 import com.google.gson.JsonObject;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -138,7 +138,7 @@ abstract class AiConfigFormScreen extends Screen {
     }
 
     /** 画顶部信息区。 */
-    protected void drawHeader(GuiGraphicsExtractor graphics, AiConfigSnapshot snapshot) {
+    protected void drawHeader(GuiGraphics graphics, AiConfigSnapshot snapshot) {
     }
 
     /** 提交前往请求里追加本屏特有的内容（例如 API Key）；默认不加。 */
@@ -419,14 +419,15 @@ abstract class AiConfigFormScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-        graphics.centeredText(this.font, this.title, this.width / 2, 10, COLOR_TITLE);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderBackground(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, COLOR_TITLE);
         drawPageIndicator(graphics);
 
         AiConfigSnapshot snapshot = AiConfigClientData.snapshot();
         if (snapshot == null) {
-            graphics.text(this.font, Component.translatable("ai.ai_assisted.gui.loading"),
+            graphics.drawString(this.font, Component.translatable("ai.ai_assisted.gui.loading"),
                     this.leftX, HEADER_TOP, COLOR_DIM);
         } else {
             drawHeader(graphics, snapshot);
@@ -437,13 +438,13 @@ abstract class AiConfigFormScreen extends Screen {
     }
 
     /** 每一项画三样：左侧标签、下方说明、（校验失败时）红色标签。 */
-    private void drawRows(GuiGraphicsExtractor graphics) {
+    private void drawRows(GuiGraphics graphics) {
         List<RowRef> pageRows = currentRows();
         for (int i = 0; i < pageRows.size(); i++) {
             RowRef row = pageRows.get(i);
             String errorKey = row.errorKey() == null ? null : this.fieldErrors.get(row.errorKey());
             int labelY = rowY(i) + Math.max(0, (this.controlH - 9) / 2 + 1);
-            graphics.text(this.font, Component.translatable(row.labelKey()),
+            graphics.drawString(this.font, Component.translatable(row.labelKey()),
                     labelX(i), labelY, errorKey == null ? COLOR_LABEL : COLOR_ERROR);
 
             if (row.descKey() != null) {
@@ -458,23 +459,23 @@ abstract class AiConfigFormScreen extends Screen {
      * <p>用 {@code font.split} 而不是自己按字数切：中英混排下按字符数切会切在半个词上，
      * 而 split 走的是 MC 自己的断行规则（含 CJK 逐字断行）。
      */
-    private void drawDescription(GuiGraphicsExtractor graphics, String descKey, int x, int y) {
+    private void drawDescription(GuiGraphics graphics, String descKey, int x, int y) {
         List<FormattedCharSequence> lines = this.font.split(Component.translatable(descKey), COL_W);
         for (int line = 0; line < Math.min(lines.size(), this.descLines); line++) {
-            graphics.text(this.font, lines.get(line), x, y + line * LINE_H, COLOR_DESC);
+            graphics.drawString(this.font, lines.get(line), x, y + line * LINE_H, COLOR_DESC);
         }
         if (lines.size() > this.descLines) {
             // 说明被截断了就加个省略号，免得看起来像是写漏了半句
             int lastY = y + (this.descLines - 1) * LINE_H;
-            graphics.text(this.font, Component.literal("…"), x + COL_W - 5, lastY, COLOR_DESC);
+            graphics.drawString(this.font, Component.literal("…"), x + COL_W - 5, lastY, COLOR_DESC);
         }
     }
 
-    private void drawStatus(GuiGraphicsExtractor graphics) {
+    private void drawStatus(GuiGraphics graphics) {
         int y = this.height - 44;
         if (!this.fieldErrors.isEmpty()) {
             // 逐字段错误在标签上已经标红，这里给一句汇总，避免玩家以为"点了没反应"
-            graphics.text(this.font, Component.translatable("ai.ai_assisted.gui.status.rejected"),
+            graphics.drawString(this.font, Component.translatable("ai.ai_assisted.gui.status.rejected"),
                     this.leftX, y, COLOR_ERROR);
             y += LINE_H;
         }
@@ -485,7 +486,7 @@ abstract class AiConfigFormScreen extends Screen {
                 this.status.getString().equals(Component.translatable("ai.ai_assisted.gui.status.rejected").getString())) {
             return;
         }
-        graphics.text(this.font, this.status, this.leftX, y, COLOR_STATUS);
+        graphics.drawString(this.font, this.status, this.leftX, y, COLOR_STATUS);
     }
 
     @Override
@@ -576,19 +577,19 @@ abstract class AiConfigFormScreen extends Screen {
 
 
     /** 页码文字与翻页按钮一起画在右上角。 */
-    private void drawPageIndicator(GuiGraphicsExtractor graphics) {
+    private void drawPageIndicator(GuiGraphics graphics) {
         if (this.pages.size() <= 1) {
             return;
         }
         Component text = Component.translatable("ai.ai_assisted.gui.page", this.pageIndex + 1, this.pages.size());
         int rightEdge = contentRight();
-        graphics.text(this.font, text,
+        graphics.drawString(this.font, text,
                 rightEdge - NAV_BUTTON_W * 2 - 8 - this.font.width(text), 9, COLOR_DIM);
     }
 
     /** 单行灰字（子类画顶部信息区时用）。超宽会被截断，不会盖到右边那一列。 */
-    protected void drawDimLine(GuiGraphicsExtractor graphics, Component text, int y) {
-        graphics.text(this.font, this.font.plainSubstrByWidth(text.getString(), COL_W * 2 + 16),
+    protected void drawDimLine(GuiGraphics graphics, Component text, int y) {
+        graphics.drawString(this.font, this.font.plainSubstrByWidth(text.getString(), COL_W * 2 + 16),
                 this.leftX, y, COLOR_DIM);
     }
 

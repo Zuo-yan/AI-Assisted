@@ -37,13 +37,12 @@ import java.util.Optional;
  *
  * <p>门槛由配置 {@code ai.permission.adminLevel}（0~4，默认 4）决定，<b>运行时生效</b>：
  * 谓词写成 {@code AiPermissions::allows} 是刻意的 —— Brigadier 只在注册时拿一次谓词对象，
- * 若在这里预先构造 {@code PermissionCheck}，改配置就必须重启服务端才认。
+ * 每次检查读取当前门槛，配置修改后无需重启。
  *
  * <p><b>密钥处理</b>：{@code /ai key set} 的入参会写进加密文件，但<b>绝不</b>回显、绝不进日志。
  * 命令反馈里只说明「已保存」以及「更推荐用环境变量」。
  *
- * <p>⚠️ 26.3 的权限 API 与旧版不同：没有 {@code src.hasPermission(2)}，
- * 而是 {@code Commands.hasPermission(PermissionCheck)}，等级常量在 {@code Commands.LEVEL_*}。
+ * <p>1.21.1 的权限通过 {@code CommandSourceStack.hasPermission(int)} 检查。
  */
 public final class AiCommand {
 
@@ -287,7 +286,7 @@ public final class AiCommand {
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         AiConfig config = AiRuntime.get().config();
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
         int editLevel = AiPermissions.configuredLevel();
 
         context.getSource().sendSuccess(() -> Component.translatable("ai.ai_assisted.whoami.level",
@@ -378,7 +377,7 @@ public final class AiCommand {
 
         // 覆盖复查：提议到现在这段时间里，目标位置可能被人放了东西
         CoveragePlanner.Result coverage = CoveragePlanner.check(
-                pending.plan(), pending.placement(), new McTerrainProbe(player.level()), config.buildAllowNonNaturalTerrain());
+                pending.plan(), pending.placement(), new McTerrainProbe(player.serverLevel()), config.buildAllowNonNaturalTerrain());
         if (coverage.unloadedChunk()) {
             context.getSource().sendFailure(Component.translatable("ai.ai_assisted.build.abort_unloaded"));
             return 0;
@@ -408,7 +407,7 @@ public final class AiCommand {
      * 这是"任意指令"这一档唯一能事后追责的手段。
      */
     private static void audit(ServerPlayer player, int level, String command, String outcome) {
-        LOGGER.info("[AI][危险] {}（等级 {}）{} /{}", player.getGameProfile().name(), level, outcome, command);
+        LOGGER.info("[AI][危险] {}（等级 {}）{} /{}", player.getGameProfile().getName(), level, outcome, command);
     }
 
     private static Component verdict(boolean allowed) {
@@ -428,7 +427,7 @@ public final class AiCommand {
             // 建造/撤销都是"某个玩家自己的状态"，控制台没有可撤销的东西
             return false;
         }
-        return AiPermissions.highestLevelFor(player.permissions())
+        return AiPermissions.highestLevelFor(player)
                 >= AiRuntime.get().config().toolAdminLevel();
     }
 

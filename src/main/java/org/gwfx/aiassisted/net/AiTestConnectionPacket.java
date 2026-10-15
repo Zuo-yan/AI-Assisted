@@ -5,7 +5,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -31,7 +31,7 @@ import java.util.List;
 public record AiTestConnectionPacket(String json) implements CustomPacketPayload {
 
     public static final Type<AiTestConnectionPacket> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_test_connection"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_test_connection"));
 
     public static final StreamCodec<ByteBuf, AiTestConnectionPacket> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.stringUtf8(4096), AiTestConnectionPacket::json,
@@ -48,7 +48,7 @@ public record AiTestConnectionPacket(String json) implements CustomPacketPayload
                 return;
             }
             // 异步回调里不能碰世界：server 在这里（主线程）先捕获
-            MinecraftServer server = player.level().getServer();
+            MinecraftServer server = player.serverLevel().getServer();
 
             if (!AiPermissions.allows(player)) {
                 PacketDistributor.sendToPlayer(player,

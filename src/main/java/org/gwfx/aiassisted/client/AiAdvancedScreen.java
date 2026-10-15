@@ -1,6 +1,6 @@
 package org.gwfx.aiassisted.client;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import org.gwfx.aiassisted.core.config.AiConfigFields;
@@ -50,14 +50,14 @@ public class AiAdvancedScreen extends AiConfigFormScreen {
     }
 
     @Override
-    protected void drawHeader(GuiGraphicsExtractor graphics, AiConfigSnapshot snapshot) {
+    protected void drawHeader(GuiGraphics graphics, AiConfigSnapshot snapshot) {
         String group = currentGroup()
                 .map(found -> Component.translatable(found.labelKey()).getString())
                 .orElse("");
         drawDimLine(graphics, Component.translatable("ai.ai_assisted.gui.advanced.header", group), HEADER_TOP);
 
         if (readOnly()) {
-            graphics.text(this.font, Component.translatable("ai.ai_assisted.gui.read_only"),
+            graphics.drawString(this.font, Component.translatable("ai.ai_assisted.gui.read_only"),
                     this.leftX, HEADER_TOP + LINE_H, COLOR_ERROR);
         }
     }
@@ -72,9 +72,8 @@ public class AiAdvancedScreen extends AiConfigFormScreen {
     @Override
     public void onClose() {
         // ESC 与"返回"都回主界面：两页本来就是同一份配置的两半，直接退出游戏会显得莫名
-        // （26.3 的开屏入口在 Minecraft.gui 上，见 DeathNoteScreen 的同款写法）
         if (this.minecraft != null) {
-            this.minecraft.gui.setScreen(this.parent);
+            this.minecraft.setScreen(this.parent);
         } else {
             super.onClose();
         }

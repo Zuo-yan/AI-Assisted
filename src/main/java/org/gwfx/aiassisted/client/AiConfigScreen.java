@@ -1,7 +1,7 @@
 package org.gwfx.aiassisted.client;
 
 import com.google.gson.JsonObject;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -69,7 +69,7 @@ public class AiConfigScreen extends AiConfigFormScreen {
     }
 
     @Override
-    protected void drawHeader(GuiGraphicsExtractor graphics, AiConfigSnapshot snapshot) {
+    protected void drawHeader(GuiGraphics graphics, AiConfigSnapshot snapshot) {
         int y = HEADER_TOP;
         String configured = snapshot.value(AiConfigEdits.KEY_PROVIDER);
         drawDimLine(graphics, Component.translatable("ai.ai_assisted.gui.effective_provider",
@@ -85,7 +85,7 @@ public class AiConfigScreen extends AiConfigFormScreen {
         y += LINE_H;
 
         if (readOnly()) {
-            graphics.text(this.font, Component.translatable("ai.ai_assisted.gui.read_only"),
+            graphics.drawString(this.font, Component.translatable("ai.ai_assisted.gui.read_only"),
                     this.leftX, y, COLOR_ERROR);
         }
     }
@@ -102,8 +102,8 @@ public class AiConfigScreen extends AiConfigFormScreen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
         drawMoreHint(graphics);
     }
 
@@ -112,7 +112,7 @@ public class AiConfigScreen extends AiConfigFormScreen {
      * 改完必须在那边单独点「应用」。与按钮同行、右对齐贴着按钮左缘；
      * 空间只有「完成」到按钮之间的空档，文案要短，超宽按剩余宽度截断。
      */
-    private void drawMoreHint(GuiGraphicsExtractor graphics) {
+    private void drawMoreHint(GuiGraphics graphics) {
         Component hint = Component.translatable("ai.ai_assisted.gui.more_hint");
         int moreX = contentRight() - BUTTON_W;
         int maxW = moreX - 6 - (bottomButtonX(1) + BUTTON_W + 8);
@@ -121,7 +121,7 @@ public class AiConfigScreen extends AiConfigFormScreen {
             return;
         }
         // 与按钮行同一水平线（按钮 y = height-26，见基类 init），垂直居中于 20px 高的按钮
-        graphics.text(this.font, text, moreX - 6 - this.font.width(text),
+        graphics.drawString(this.font, text, moreX - 6 - this.font.width(text),
                 this.height - 26 + 6, COLOR_DIM);
     }
 
@@ -135,7 +135,7 @@ public class AiConfigScreen extends AiConfigFormScreen {
 
     private void openAdvanced() {
         if (this.minecraft != null) {
-            this.minecraft.gui.setScreen(new AiAdvancedScreen(this));
+            this.minecraft.setScreen(new AiAdvancedScreen(this));
         }
     }
 
@@ -144,7 +144,7 @@ public class AiConfigScreen extends AiConfigFormScreen {
         EditBox box = boundBox(x, y, 256, this.apiKeyDraft, text -> this.apiKeyDraft = text);
         // 掩码：按输入长度画等长的 *，屏幕上不出现密钥本体（防录屏/截图时顺手泄露）
         // 刻意不设 setHint：这一行下面是完整的灰字说明，输入框里再挂一条长提示会把框塞满
-        box.addFormatter((text, offset) -> FormattedCharSequence.forward("*".repeat(text.length()), Style.EMPTY));
+        box.setFormatter((text, offset) -> FormattedCharSequence.forward("*".repeat(text.length()), Style.EMPTY));
         this.apiKeyBox = box;
         return addEditable(box);
     }

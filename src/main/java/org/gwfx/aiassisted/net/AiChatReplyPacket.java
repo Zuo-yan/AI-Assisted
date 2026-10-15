@@ -5,7 +5,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -25,7 +25,7 @@ import org.gwfx.aiassisted.AiAssistedMod;
 public record AiChatReplyPacket(Component text) implements CustomPacketPayload {
 
     public static final Type<AiChatReplyPacket> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_chat_reply"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_chat_reply"));
 
     public static final StreamCodec<ByteBuf, AiChatReplyPacket> STREAM_CODEC = StreamCodec.composite(
             ComponentSerialization.TRUSTED_CONTEXT_FREE_STREAM_CODEC, AiChatReplyPacket::text,

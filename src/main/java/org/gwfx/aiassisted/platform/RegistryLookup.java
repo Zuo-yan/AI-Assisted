@@ -1,8 +1,7 @@
 package org.gwfx.aiassisted.platform;
 
-import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
@@ -15,24 +14,24 @@ public final class RegistryLookup {
 
     private RegistryLookup() {}
 
-    public static Optional<Item> item(Identifier id) {
-        return BuiltInRegistries.ITEM.get(id).map(Holder.Reference::value);
+    public static Optional<Item> item(ResourceLocation id) {
+        return id == null ? Optional.empty() : BuiltInRegistries.ITEM.getOptional(id);
     }
 
-    public static boolean hasItem(Identifier id) {
+    public static boolean hasItem(ResourceLocation id) {
         return id != null && BuiltInRegistries.ITEM.containsKey(id);
     }
 
-    public static Optional<Block> block(Identifier id) {
-        return id == null ? Optional.empty() : BuiltInRegistries.BLOCK.get(id).map(Holder.Reference::value);
+    public static Optional<Block> block(ResourceLocation id) {
+        return id == null ? Optional.empty() : BuiltInRegistries.BLOCK.getOptional(id);
     }
 
-    public static boolean hasBlock(Identifier id) {
+    public static boolean hasBlock(ResourceLocation id) {
         return id != null && BuiltInRegistries.BLOCK.containsKey(id);
     }
 
     public static String blockId(Block block) {
-        Identifier id = block == null ? null : BuiltInRegistries.BLOCK.getKey(block);
+        ResourceLocation id = block == null ? null : BuiltInRegistries.BLOCK.getKey(block);
         return id == null ? "" : id.toString();
     }
 }

@@ -41,8 +41,8 @@ public final class AiVoiceClientManager {
             if (duration < 300 || wavBytes.length < 1000) {
                 // 录音不足 300ms 判定为误触，不发送并友好提示
                 if (mc.player != null) {
-                    // 26.3 没有 displayClientMessage(Component, boolean)：overlay 语义用 sendOverlayMessage
-                    mc.player.sendOverlayMessage(Component.translatable("ai.ai_assisted.voice.too_short"));
+                    // 录音状态通过快捷栏上方的提示显示。
+                    mc.player.displayClientMessage(Component.translatable("ai.ai_assisted.voice.too_short"), true);
                 }
                 return;
             }

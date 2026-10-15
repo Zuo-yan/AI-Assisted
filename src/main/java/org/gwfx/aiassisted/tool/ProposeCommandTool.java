@@ -58,7 +58,7 @@ public final class ProposeCommandTool {
             return ToolOutcome.error("本服务器未开启「AI 提议执行指令」（ai.tool.dangerousEnabled=false），"
                     + "你无法提议执行任何指令。");
         }
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
         if (level < config.toolAdminLevel()) {
             return ToolOutcome.error("发起者权限等级为 " + level + "，低于本功能要求的 "
                     + config.toolAdminLevel() + " 级，无法提议执行指令。");
@@ -75,7 +75,7 @@ public final class ProposeCommandTool {
         String command = normalized.command();
         String reason = CommandText.normalizeReason(ToolArgs.string(args, "reason").orElse(""));
 
-        MinecraftServer server = player.level().getServer();
+        MinecraftServer server = player.serverLevel().getServer();
         if (server == null) {
             return ToolOutcome.error("服务端不可用，无法校验指令。");
         }

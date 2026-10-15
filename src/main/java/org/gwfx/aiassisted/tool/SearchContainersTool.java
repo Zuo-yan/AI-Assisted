@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -66,7 +66,7 @@ public final class SearchContainersTool {
 
         Block blockFilter = null;
         if (rawBlock.isPresent()) {
-            Identifier id = Identifier.tryParse(rawBlock.get());
+            ResourceLocation id = ResourceLocation.tryParse(rawBlock.get());
             if (id == null) {
                 return ToolOutcome.error("block_id 不是合法的注册表 id：" + rawBlock.get());
             }
@@ -84,7 +84,7 @@ public final class SearchContainersTool {
                 return ToolOutcome.error("本服务端未开启按容器内容过滤（ai.tool.containersReadContents=false），"
                         + "只能按方块类型查找，请改用 block_id 参数。");
             }
-            Identifier id = Identifier.tryParse(rawItem.get());
+            ResourceLocation id = ResourceLocation.tryParse(rawItem.get());
             if (id == null) {
                 return ToolOutcome.error("item_id 不是合法的注册表 id：" + rawItem.get());
             }
@@ -96,7 +96,7 @@ public final class SearchContainersTool {
         }
 
         int radius = ToolArgs.integer(args, "radius", DEFAULT_RADIUS, MIN_RADIUS, MAX_RADIUS);
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         BlockPos origin = player.blockPosition();
         int radiusSqr = radius * radius;
 
@@ -138,7 +138,7 @@ public final class SearchContainersTool {
                             continue;
                         }
                     }
-                    Identifier blockId = BuiltInRegistries.BLOCK.getKey(block);
+                    ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
                     if (blockId == null) {
                         continue;
                     }

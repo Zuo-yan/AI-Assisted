@@ -43,9 +43,8 @@ public final class McTerrainProbe implements TerrainProbe {
             BlockTags.LOGS,
             BlockTags.FLOWERS,
             BlockTags.CROPS,
-            BlockTags.MOSS_BLOCKS,
             BlockTags.TERRACOTTA,
-            BlockTags.ORES,
+            net.neoforged.neoforge.common.Tags.Blocks.ORES,
             BlockTags.CORAL_BLOCKS);
 
     /** tag 盖不到、但确实属于自然地表的东西（沙砾/黏土/水/草…）。 */
@@ -64,6 +63,7 @@ public final class McTerrainProbe implements TerrainProbe {
             Blocks.SNOW_BLOCK,
             Blocks.POWDER_SNOW,
             Blocks.MOSS_BLOCK,
+            Blocks.MOSS_CARPET,
             Blocks.COARSE_DIRT,
             Blocks.PODZOL,
             Blocks.MYCELIUM,

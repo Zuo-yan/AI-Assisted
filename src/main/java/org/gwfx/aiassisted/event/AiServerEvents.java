@@ -3,7 +3,6 @@ package org.gwfx.aiassisted.event;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -29,7 +28,6 @@ import org.gwfx.aiassisted.core.config.AiConfig;
  *       推进建造/撤销作业</li>
  *   <li>{@code PlayerEvent.PlayerLoggedInEvent} → 进服问候（守卫不满足则静默跳过）</li>
  *   <li>{@code PlayerEvent.PlayerLoggedOutEvent} → 回收该玩家的会话与待发分页</li>
- *   <li>{@code ModConfigEvent} → 请求热重载（延迟到下一 tick，避开与 Config.onLoad 的顺序竞态）</li>
  *   <li>{@code ServerStoppingEvent} → 关闭 HTTP 线程池</li>
  *   <li>{@code ServerChatEvent} → <b>默认不拦截</b>；仅当配置开启前缀模式且消息命中前缀时才接管</li>
  * </ul>
@@ -80,14 +78,6 @@ public final class AiServerEvents {
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (AiRuntime.isInitialized() && event.getEntity() instanceof ServerPlayer player) {
             AiRuntime.get().onPlayerLeave(player.getUUID());
-        }
-    }
-
-    @SubscribeEvent
-    public static void onConfigLoad(ModConfigEvent event) {
-        // 加载期不创建实例（那时不该建线程池）；已初始化时只置一个标记，下一 tick 再重建
-        if (AiRuntime.isInitialized()) {
-            AiRuntime.get().requestReload();
         }
     }
 

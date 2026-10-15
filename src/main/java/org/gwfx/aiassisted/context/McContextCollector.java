@@ -3,7 +3,7 @@ package org.gwfx.aiassisted.context;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -66,7 +66,7 @@ public final class McContextCollector {
      */
     public ContextSnapshot collect(ServerPlayer player, AiConfig config,
                                    ContextSnapshot.RecentCommand recentCommand) {
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         BlockPos origin = player.blockPosition();
         long now = System.currentTimeMillis();
 
@@ -82,9 +82,9 @@ public final class McContextCollector {
                 || village.status() == ContextSnapshot.VillageStatus.FAILED;
 
         return new ContextSnapshot(
-                level.dimension().identifier().toString(),
+                level.dimension().location().toString(),
                 // 调用者等级由服务端现算：它就是"模型眼里的你"，必须与工具注册时用的同一个判据
-                AiPermissions.highestLevelFor(player.permissions()),
+                AiPermissions.highestLevelFor(player),
                 origin.getX(), origin.getY(), origin.getZ(),
                 level.getGameTime(),
                 level.isRaining(),
@@ -136,7 +136,7 @@ public final class McContextCollector {
     }
 
     private static String entityTypeId(EntityType<?> type) {
-        Identifier id = BuiltInRegistries.ENTITY_TYPE.getKey(type);
+        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(type);
         return id == null ? null : id.toString();
     }
 
@@ -154,7 +154,7 @@ public final class McContextCollector {
             if (stack.isEmpty()) {
                 continue;
             }
-            Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
             if (id == null) {
                 continue;
             }
@@ -204,7 +204,7 @@ public final class McContextCollector {
                     if (distanceSqr > radiusSqr) {
                         continue;
                     }
-                    Identifier blockId = BuiltInRegistries.BLOCK.getKey(blockEntity.getBlockState().getBlock());
+                    ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(blockEntity.getBlockState().getBlock());
                     if (blockId == null) {
                         continue;
                     }

@@ -48,13 +48,13 @@ public final class ServerInfoTool {
     }
 
     static ToolOutcome invoke(ServerPlayer player, AiConfig config, JsonObject args) {
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
         if (level < config.toolAdminLevel()) {
             return ToolOutcome.error("发起者权限等级为 " + level + "，低于本功能要求的 "
                     + config.toolAdminLevel() + " 级，无权读取全服信息。");
         }
 
-        MinecraftServer server = player.level().getServer();
+        MinecraftServer server = player.serverLevel().getServer();
         if (server == null) {
             return ToolOutcome.error("服务端不可用，无法读取全服信息。");
         }
@@ -64,7 +64,7 @@ public final class ServerInfoTool {
 
         List<ServerPlayer> online = new ArrayList<>(server.getPlayerList().getPlayers());
         // 按名字排序：同一份状态每次给模型的顺序要一致，否则模型会以为"顺序变了 = 有人进出"
-        online.sort(Comparator.comparing(onlinePlayer -> onlinePlayer.getGameProfile().name()));
+        online.sort(Comparator.comparing(onlinePlayer -> onlinePlayer.getGameProfile().getName()));
 
         out.append("服务器现状（实时）：\n");
         out.append("- 在线玩家: ").append(online.size())
@@ -73,7 +73,7 @@ public final class ServerInfoTool {
         appendOnlineAdmins(out, online, limit);
         out.append("- 性能: ").append(describePerformance(server)).append('\n');
         out.append("- 已运行: ").append(describeUptime(server)).append('\n');
-        out.append("- 白名单: ").append(server.isUsingWhitelist() ? "已启用" : "未启用").append('\n');
+        out.append("- 白名单: ").append(server.getPlayerList().isUsingWhitelist() ? "已启用" : "未启用").append('\n');
         out.append("- 世界种子: ").append(server.overworld().getSeed()).append('\n');
 
         return ToolOutcome.ok(out.toString());
@@ -88,8 +88,8 @@ public final class ServerInfoTool {
         int shown = Math.min(online.size(), limit);
         for (int i = 0; i < shown; i++) {
             ServerPlayer onlinePlayer = online.get(i);
-            out.append("  · ").append(onlinePlayer.getGameProfile().name())
-                    .append(" / ").append(onlinePlayer.level().dimension().identifier())
+            out.append("  · ").append(onlinePlayer.getGameProfile().getName())
+                    .append(" / ").append(onlinePlayer.serverLevel().dimension().location())
                     .append(' ').append(onlinePlayer.blockPosition().getX())
                     .append(' ').append(onlinePlayer.blockPosition().getY())
                     .append(' ').append(onlinePlayer.blockPosition().getZ())
@@ -104,9 +104,9 @@ public final class ServerInfoTool {
     private static void appendOnlineAdmins(StringBuilder out, List<ServerPlayer> online, int limit) {
         List<String> admins = new ArrayList<>();
         for (ServerPlayer onlinePlayer : online) {
-            int level = AiPermissions.highestLevelFor(onlinePlayer.permissions());
+            int level = AiPermissions.highestLevelFor(onlinePlayer);
             if (level >= ADMIN_LEVEL) {
-                admins.add(onlinePlayer.getGameProfile().name() + "（" + level + " 级）");
+                admins.add(onlinePlayer.getGameProfile().getName() + "（" + level + " 级）");
             }
         }
         if (admins.isEmpty()) {

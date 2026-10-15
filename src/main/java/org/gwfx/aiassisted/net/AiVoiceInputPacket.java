@@ -4,7 +4,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.gwfx.aiassisted.AiAssistedMod;
@@ -19,7 +19,7 @@ public record AiVoiceInputPacket(byte[] audioData, String recognizedText) implem
     public static final int MAX_TEXT_CHARS = 32767;
 
     public static final Type<AiVoiceInputPacket> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_voice_input"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_voice_input"));
 
     public static final StreamCodec<ByteBuf, AiVoiceInputPacket> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.byteArray(MAX_AUDIO_BYTES), AiVoiceInputPacket::audioData,

@@ -3,7 +3,7 @@ package org.gwfx.aiassisted.net;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.gwfx.aiassisted.AiAssistedMod;
@@ -17,7 +17,7 @@ import org.gwfx.aiassisted.AiAssistedMod;
 public record RequestAiConfigPacket() implements CustomPacketPayload {
 
     public static final Type<RequestAiConfigPacket> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_request_config"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_request_config"));
 
     public static final StreamCodec<ByteBuf, RequestAiConfigPacket> STREAM_CODEC =
             StreamCodec.unit(new RequestAiConfigPacket());

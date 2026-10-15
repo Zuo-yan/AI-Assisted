@@ -88,7 +88,7 @@ public final class ServerVoiceService {
 
         String effectiveUrl = config.baseUrl();
         // 回调跑在传输线程：server 必须在异步发起前捕获，回调里只允许 server.execute，绝不碰世界
-        MinecraftServer server = player.level().getServer();
+        MinecraftServer server = player.serverLevel().getServer();
         runtime.voiceClient().transcribe(
                 audioData,
                 effectiveUrl,

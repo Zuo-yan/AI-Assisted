@@ -10,7 +10,7 @@ import org.gwfx.aiassisted.AiAssistedMod;
 import org.gwfx.aiassisted.client.ClientPacketSender;
 import org.slf4j.Logger;
 
-@EventBusSubscriber(modid = AiAssistedMod.MODID)
+@EventBusSubscriber(modid = AiAssistedMod.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class AiPacketHandler {
 
     private static final Logger LOGGER = LogUtils.getLogger();

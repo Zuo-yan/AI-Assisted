@@ -2,7 +2,7 @@ package org.gwfx.aiassisted.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -33,7 +33,7 @@ public final class AiClientEvents {
             return;
         }
 
-        if (minecraft.gui.screen() != null) {
+        if (minecraft.screen != null) {
             if (wasVoiceKeyDown) {
                 wasVoiceKeyDown = false;
                 AiVoiceClientManager.get().cancelRecording();
@@ -45,7 +45,7 @@ public final class AiClientEvents {
             // 先清掉上一份快照再请求：否则界面会先闪出上一次（可能来自别的服务器）的配置
             AiConfigClientData.clear();
             AiPacketHandler.sendRequestAiConfig();
-            minecraft.gui.setScreen(new AiConfigScreen());
+            minecraft.setScreen(new AiConfigScreen());
         }
 
         // 语音按住说话 (Push-to-Talk) 状态追踪
@@ -60,7 +60,7 @@ public final class AiClientEvents {
             if (AiVoiceClientManager.get().isDurationLimitExceeded()) {
                 wasVoiceKeyDown = false;
                 AiVoiceClientManager.get().onKeyReleased();
-                if (minecraft.player != null) { minecraft.player.sendOverlayMessage(net.minecraft.network.chat.Component.translatable("ai.ai_assisted.voice.max_duration")); }
+                if (minecraft.player != null) { minecraft.player.displayClientMessage(net.minecraft.network.chat.Component.translatable("ai.ai_assisted.voice.max_duration"), true); }
             }
         }
     }
@@ -71,11 +71,11 @@ public final class AiClientEvents {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.gui.hud.isHidden()) {
+        if (mc.player == null || mc.options.hideGui) {
             return;
         }
 
-        GuiGraphicsExtractor graphics = event.getGuiGraphics();
+        GuiGraphics graphics = event.getGuiGraphics();
         Font font = mc.font;
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
@@ -88,9 +88,8 @@ public final class AiClientEvents {
             int x = (screenWidth - textWidth) / 2;
             int y = screenHeight - 65;
             graphics.fill(x - 4, y - 2, x + textWidth + 4, y + 10, 0x88000000);
-            // 26.3 的 GuiGraphicsExtractor.text 在 ARGB.alpha(color)==0 时整段跳过
-            // （1.20.1 会把 alpha=0 特判成不透明），所以这里必须带 0xFF alpha 通道
-            graphics.text(font, text, x, y, 0xFFFFFFFF);
+            // 使用不透明 ARGB 颜色绘制录音提示。
+            graphics.drawString(font, text, x, y, 0xFFFFFFFF);
         }
     }
 }

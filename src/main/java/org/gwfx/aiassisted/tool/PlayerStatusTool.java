@@ -3,7 +3,7 @@ package org.gwfx.aiassisted.tool;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import org.gwfx.aiassisted.core.agent.ToolOutcome;
@@ -48,7 +48,7 @@ public final class PlayerStatusTool {
         out.append("- 饥饿值: ").append(player.getFoodData().getFoodLevel()).append(" / 20")
                 .append("，饱和度: ").append(oneDecimal(player.getFoodData().getSaturationLevel())).append('\n');
         out.append("- 经验等级: ").append(player.experienceLevel).append('\n');
-        out.append("- 位置: ").append(player.level().dimension().identifier())
+        out.append("- 位置: ").append(player.serverLevel().dimension().location())
                 .append(' ').append(pos.getX()).append(' ').append(pos.getY()).append(' ').append(pos.getZ())
                 .append('\n');
         out.append("- 状态: ").append(describeFlags(player)).append('\n');
@@ -87,7 +87,7 @@ public final class PlayerStatusTool {
         List<String> parts = new ArrayList<>(limit);
         for (int i = 0; i < limit; i++) {
             MobEffectInstance effect = effects.get(i);
-            Identifier id = BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect().value());
+            ResourceLocation id = BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect().value());
             parts.add((id == null ? "(未知效果)" : id.toString())
                     + " " + romanLevel(effect.getAmplifier())
                     + "（剩 " + describeDuration(effect.getDuration()) + "）");

@@ -3,7 +3,7 @@ package org.gwfx.aiassisted.tool;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -52,7 +52,7 @@ public final class SearchEntitiesTool {
         if (rawId.isEmpty()) {
             return ToolOutcome.error("缺少参数 entity_id（实体类型注册表 id，例如 minecraft:sheep）");
         }
-        Identifier id = Identifier.tryParse(rawId.get());
+        ResourceLocation id = ResourceLocation.tryParse(rawId.get());
         if (id == null) {
             return ToolOutcome.error("entity_id 不是合法的注册表 id：" + rawId.get());
         }
@@ -64,7 +64,7 @@ public final class SearchEntitiesTool {
 
         int radius = ToolArgs.integer(args, "radius", DEFAULT_RADIUS, MIN_RADIUS, MAX_RADIUS);
         AABB area = player.getBoundingBox().inflate(radius);
-        List<Entity> found = player.level().getEntitiesOfClass(Entity.class, area,
+        List<Entity> found = player.serverLevel().getEntitiesOfClass(Entity.class, area,
                 candidate -> candidate != player && candidate.isAlive() && candidate.getType() == target);
 
         found.sort(Comparator.comparingDouble(player::distanceToSqr));

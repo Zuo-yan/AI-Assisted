@@ -21,7 +21,7 @@ base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -61,18 +61,19 @@ neoForge {
         }
 
         data {
-            clientData()
+            data()
             programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
         }
 
         configureEach {
+            gameDirectory = project.file("run-1.21.1/${name}")
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.DEBUG
         }
     }
 
     mods {
-        "" {
+        "${mod_id}" {
             sourceSet(sourceSets.main)
         }
     }
@@ -85,11 +86,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 neoForge.addModdingDependenciesTo(sourceSets.test)
 
 dependencies {
-    // ===== 测试环境模组（IDEA 的 runClient 会加载；发布 jar 不含它们）=====
-    // 对齐 forge 分支的联调环境（暮色森林 / Refurbished 家具 + framework 前置）：
-    // 它们目前没有 26.3 构建，等你手里的整合包确定用哪个第三方内容模组后，
-    // 把 jar 放进 run/mods 即可联调（或改用 neoForge { mods { register(...) } } 的本地 jar 方式）。
-    // 26.3 下 dev 运行时无需 forge 的 mixin.env.remapRefMap：ModDevGradle 直接用 official 命名。
+    // 第三方联调模组可按需放入 run-1.21.1/client/mods；不会打包到发布 JAR。
 
     // JUnit 5
     testImplementation platform('org.junit:junit-bom:5.11.4')
@@ -97,7 +94,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // Gson：供 core 的报文处理与单测使用
-    testImplementation 'com.google.code.gson:gson:2.14.0'
+    testImplementation 'com.google.code.gson:gson:2.10.1'
 }
 
 tasks.named('test') {

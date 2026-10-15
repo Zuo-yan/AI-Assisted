@@ -3,7 +3,7 @@ package org.gwfx.aiassisted.tool;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.gwfx.aiassisted.AiPermissions;
 import org.gwfx.aiassisted.build.McTerrainProbe;
@@ -76,7 +76,7 @@ public final class ProposeBuildTool {
         if (!config.buildEnabled()) {
             return ToolOutcome.error("本服务器未开启「AI 建造」（ai.build.enabled=false），你无法提议建造。");
         }
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
         if (level < config.toolAdminLevel()) {
             return ToolOutcome.error("发起者权限等级为 " + level + "，低于本功能要求的 "
                     + config.toolAdminLevel() + " 级，无法提议建造。");
@@ -107,7 +107,7 @@ public final class ProposeBuildTool {
 
         // ③ 注册表存在性（core 层只能看形状，能不能真的放下去要问注册表）
         for (String blockId : blueprint.palette().values()) {
-            if (!BuildPlan.isAir(blockId) && !RegistryLookup.hasBlock(Identifier.tryParse(blockId))) {
+            if (!BuildPlan.isAir(blockId) && !RegistryLookup.hasBlock(ResourceLocation.tryParse(blockId))) {
                 return ToolOutcome.error("方块「" + blockId + "」在本服务器上不存在，请换一种材料。");
             }
         }
@@ -123,7 +123,7 @@ public final class ProposeBuildTool {
                 facingOf(player), ORIGIN_OFFSET);
 
         // ⑤ 覆盖检查：只碰自然地形，判不准就当人工方块
-        CoveragePlanner.Result coverage = CoveragePlanner.check(plan, placement, new McTerrainProbe(player.level()), config.buildAllowNonNaturalTerrain());
+        CoveragePlanner.Result coverage = CoveragePlanner.check(plan, placement, new McTerrainProbe(player.serverLevel()), config.buildAllowNonNaturalTerrain());
         if (coverage.unloadedChunk()) {
             return ToolOutcome.error("目标区域的区块没有加载（你可能站在区块边缘），请让玩家走近一点再试。");
         }

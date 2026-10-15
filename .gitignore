@@ -20,6 +20,7 @@ out/
 
 # NeoForge / Minecraft 运行目录（留给本地测试，不进仓库）
 /run/
+/run-1.21.1/
 
 # 本地加密密钥存储（绝不能进版本控制）
 /config/ai_assisted/ai-secret.dat

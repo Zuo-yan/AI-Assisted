@@ -1,6 +1,22 @@
 # AI-Assisted (Minecraft AI 助手模组)
 
-基于 NeoForge 26.3 (Minecraft 1.26.3) 的独立 AI 助手模组。
+适用于 **Minecraft 1.21.1 + NeoForge 21.1.262** 的独立 AI 助手模组。
+
+当前版本：`1.6-neoforge-1.21.1`，开发分支：`codex/1.21.1-neoforge`。
+
+## 开发与构建
+
+需要 Java 21。Windows PowerShell：
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
+.\gradlew.bat build
+.\gradlew.bat runClient
+```
+
+构建产物：`build/libs/ai_assisted-1.6-neoforge-1.21.1.jar`。
+
+开发运行目录按任务隔离在 `run-1.21.1/` 下；客户端使用 `run-1.21.1/client/`，避免误用原 26.3 开发目录里的存档和配置。
 
 ## 特性
 

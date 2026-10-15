@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-@EventBusSubscriber(modid = AiAssistedMod.MODID)
+@EventBusSubscriber(modid = AiAssistedMod.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class Config {
 
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
@@ -556,7 +556,13 @@ public final class Config {
 
     @SubscribeEvent
     static void onLoad(final ModConfigEvent event) {
+        if (event.getConfig().getSpec() != SPEC) {
+            return;
+        }
         syncAiSnapshot();
+        if (AiRuntime.isInitialized()) {
+            AiRuntime.get().requestReload();
+        }
     }
 
     private Config() {}

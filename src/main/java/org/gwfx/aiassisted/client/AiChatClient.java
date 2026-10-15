@@ -27,8 +27,7 @@ public final class AiChatClient {
             // 玩家还没进世界（例如刚断线），丢弃即可，不需要报错
             return;
         }
-        // 26.3 的 LocalPlayer 上没有 displayClientMessage(Component, boolean)，
-        // 走聊天组件本身：文本确实来自服务端，因此用 addServerSystemMessage
-        minecraft.gui.hud.getChat().addServerSystemMessage(text);
+        // 将服务端回复写入客户端聊天栏。
+        minecraft.gui.getChat().addMessage(text);
     }
 }

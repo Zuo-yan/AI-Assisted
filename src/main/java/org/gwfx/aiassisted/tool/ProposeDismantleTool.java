@@ -2,7 +2,7 @@ package org.gwfx.aiassisted.tool;
 
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.gwfx.aiassisted.AiPermissions;
 import org.gwfx.aiassisted.build.PendingBuildStore;
@@ -54,7 +54,7 @@ public final class ProposeDismantleTool {
         if (!config.buildEnabled()) {
             return ToolOutcome.error("本服务器未开启「AI 建造」（ai.build.enabled=false），你无法提议拆除构件。");
         }
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
         if (level < config.toolAdminLevel()) {
             return ToolOutcome.error("你的权限等级不足（需要管理等级 " + config.toolAdminLevel() + "），无法提议拆除建筑构件。");
         }
@@ -71,7 +71,7 @@ public final class ProposeDismantleTool {
         }
 
         if (!BuildPlan.isAir(replaceWith)) {
-            Identifier replaceId = Identifier.tryParse(replaceWith);
+            ResourceLocation replaceId = ResourceLocation.tryParse(replaceWith);
             if (replaceId == null || !RegistryLookup.hasBlock(replaceId)) {
                 return ToolOutcome.error("目标替换方块不存在或未注册：" + replaceWith);
             }

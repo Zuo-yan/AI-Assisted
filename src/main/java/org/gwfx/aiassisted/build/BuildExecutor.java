@@ -3,7 +3,7 @@ package org.gwfx.aiassisted.build;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -40,7 +40,7 @@ final class BuildExecutor {
 
     /** 目标方块状态；支持自适应水平朝向（楼梯/家具等模组方块）。 */
     static BlockState stateFor(String blockId, Direction facing) {
-        Block block = RegistryLookup.block(Identifier.tryParse(blockId)).orElse(null);
+        Block block = RegistryLookup.block(ResourceLocation.tryParse(blockId)).orElse(null);
         if (block == null) {
             return null;
         }

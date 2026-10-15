@@ -4,7 +4,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -41,7 +41,7 @@ public record AiConfigSyncPacket(String json) implements CustomPacketPayload {
     public static final int MAX_JSON_CHARS = 16384;
 
     public static final Type<AiConfigSyncPacket> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_config_sync"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_config_sync"));
 
     public static final StreamCodec<ByteBuf, AiConfigSyncPacket> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.stringUtf8(MAX_JSON_CHARS), AiConfigSyncPacket::json,

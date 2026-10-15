@@ -4,7 +4,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.gwfx.aiassisted.AiAssistedMod;
 
@@ -14,7 +14,7 @@ import org.gwfx.aiassisted.AiAssistedMod;
 public record AiTestConnectionResultPacket(boolean success, int latencyMs, String message) implements CustomPacketPayload {
 
     public static final Type<AiTestConnectionResultPacket> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_test_connection_result"));
+            new Type<>(ResourceLocation.fromNamespaceAndPath(AiAssistedMod.MODID, "ai_test_connection_result"));
 
     public static final StreamCodec<ByteBuf, AiTestConnectionResultPacket> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, AiTestConnectionResultPacket::success,

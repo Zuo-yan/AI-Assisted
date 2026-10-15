@@ -42,7 +42,7 @@ public final class JdkHttpTransport implements HttpTransport {
 
     public JdkHttpTransport(Duration connectTimeout, int retryCount) {
         this.retryCount = Math.max(0, retryCount);
-        // 26.3 目标是 Java 21+：用虚拟线程承载异步请求 —— HTTP 客户端本身是阻塞式 IO，虚拟线程足够轻量
+        // 1.21.1 使用 Java 21：用虚拟线程承载异步请求 —— HTTP 客户端本身是阻塞式 IO，虚拟线程足够轻量
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.client = HttpClient.newBuilder()
                 .connectTimeout(connectTimeout)

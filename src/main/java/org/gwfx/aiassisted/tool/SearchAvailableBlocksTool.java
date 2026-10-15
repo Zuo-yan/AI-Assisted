@@ -3,7 +3,7 @@ package org.gwfx.aiassisted.tool;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import org.gwfx.aiassisted.core.agent.ToolArgs;
@@ -52,7 +52,7 @@ public final class SearchAvailableBlocksTool {
                 continue;
             }
 
-            Identifier key = BuiltInRegistries.BLOCK.getKey(block);
+            ResourceLocation key = BuiltInRegistries.BLOCK.getKey(block);
             if (key == null) {
                 continue;
             }

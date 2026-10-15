@@ -2,7 +2,7 @@ package org.gwfx.aiassisted.tool;
 
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
@@ -57,7 +57,7 @@ public final class SearchInventoryTool {
             return ToolOutcome.ok(describeAll(inventory, config.toolMaxResults()));
         }
 
-        Identifier id = Identifier.tryParse(rawId.get());
+        ResourceLocation id = ResourceLocation.tryParse(rawId.get());
         if (id == null) {
             return ToolOutcome.error("item_id 不是合法的注册表 id：" + rawId.get());
         }
@@ -70,8 +70,8 @@ public final class SearchInventoryTool {
 
     /** 完整摘要：按物品聚合、按数量排序。 */
     private static String describeAll(Inventory inventory, int maxResults) {
-        Map<Identifier, Integer> counts = new HashMap<>();
-        Map<Identifier, Integer> slotCounts = new HashMap<>();
+        Map<ResourceLocation, Integer> counts = new HashMap<>();
+        Map<ResourceLocation, Integer> slotCounts = new HashMap<>();
         int usedSlots = 0;
 
         for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
@@ -79,7 +79,7 @@ public final class SearchInventoryTool {
             if (stack.isEmpty()) {
                 continue;
             }
-            Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
             if (id == null) {
                 continue;
             }
@@ -92,7 +92,7 @@ public final class SearchInventoryTool {
             return "背包与快捷栏都是空的。";
         }
 
-        List<Map.Entry<Identifier, Integer>> sorted = new ArrayList<>(counts.entrySet());
+        List<Map.Entry<ResourceLocation, Integer>> sorted = new ArrayList<>(counts.entrySet());
         sorted.sort((left, right) -> Integer.compare(right.getValue(), left.getValue()));
 
         int limit = Math.min(sorted.size(), Math.max(1, maxResults));
@@ -105,7 +105,7 @@ public final class SearchInventoryTool {
         out.append("：\n");
 
         for (int i = 0; i < limit; i++) {
-            Map.Entry<Identifier, Integer> entry = sorted.get(i);
+            Map.Entry<ResourceLocation, Integer> entry = sorted.get(i);
             out.append("- ").append(entry.getKey()).append(" x").append(entry.getValue())
                     .append("（占 ").append(slotCounts.get(entry.getKey())).append(" 槽）\n");
         }
@@ -113,7 +113,7 @@ public final class SearchInventoryTool {
     }
 
     /** 单个物品的逐槽明细。 */
-    private static String describeItem(Inventory inventory, Item item, Identifier id) {
+    private static String describeItem(Inventory inventory, Item item, ResourceLocation id) {
         StringBuilder detail = new StringBuilder(128);
         int total = 0;
         int slotCount = 0;

@@ -53,7 +53,7 @@ public final class AiConfirmHandler {
         AiRuntime runtime = AiRuntime.get();
         long now = System.currentTimeMillis();
         AiConfig config = runtime.config();
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
 
         // 1. 优先处理建造方案确认
         Optional<PendingBuildStore.Pending> pendingBuild =
@@ -82,7 +82,7 @@ public final class AiConfirmHandler {
 
         AiRuntime runtime = AiRuntime.get();
         long now = System.currentTimeMillis();
-        int level = AiPermissions.highestLevelFor(player.permissions());
+        int level = AiPermissions.highestLevelFor(player);
 
         Optional<PendingBuildStore.Pending> build = runtime.pendingBuilds().take(player.getUUID(), now);
         Optional<PendingCommandStore.Pending> pending = runtime.pendingCommands().take(player.getUUID(), now);
@@ -110,7 +110,7 @@ public final class AiConfirmHandler {
         }
 
         CoveragePlanner.Result coverage = CoveragePlanner.check(
-                pending.plan(), pending.placement(), new McTerrainProbe(player.level()),
+                pending.plan(), pending.placement(), new McTerrainProbe(player.serverLevel()),
                 config.buildAllowNonNaturalTerrain());
 
         if (coverage.unloadedChunk()) {
@@ -143,7 +143,7 @@ public final class AiConfirmHandler {
                     level, config.toolAdminLevel()), "权限不足，无法执行该指令。");
         }
 
-        MinecraftServer server = player.level().getServer();
+        MinecraftServer server = player.serverLevel().getServer();
         if (server == null) {
             return new Result(false, Component.translatable("ai.ai_assisted.error.no_server"), "服务器不可用。");
         }
@@ -151,7 +151,7 @@ public final class AiConfirmHandler {
         CommandOutputCollector collector = new CommandOutputCollector();
         CommandSourceStack source = player.createCommandSourceStack()
                 .withSource(collector)
-                .withPermission(player.permissions());
+                .withPermission(level);
 
         server.getCommands().performPrefixedCommand(source, record.command());
 
@@ -170,6 +170,6 @@ public final class AiConfirmHandler {
     }
 
     private static void audit(ServerPlayer player, int level, String command, String outcome) {
-        LOGGER.info("[AI][危险] {}（等级 {}）{} /{}", player.getGameProfile().name(), level, outcome, command);
+        LOGGER.info("[AI][危险] {}（等级 {}）{} /{}", player.getGameProfile().getName(), level, outcome, command);
     }
 }

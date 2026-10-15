@@ -207,8 +207,8 @@ public final class AiChatService {
             return;
         }
 
-        // 26.3 的 ServerPlayer 上没有 getServer()，从所在 ServerLevel 取
-        MinecraftServer server = player.level().getServer();
+        // 从玩家所在的服务端世界取得服务器。
+        MinecraftServer server = player.serverLevel().getServer();
         if (server == null) {
             send(player, Component.translatable("ai.ai_assisted.error.no_server"));
             return;
@@ -242,7 +242,7 @@ public final class AiChatService {
             // 玩家名字是记忆文件的元数据：每次对话顺手刷新，模型才知道「在跟谁说话」
             String memoryBlock;
             if (currentConfig.memoryEnabled()) {
-                this.memories.rememberName(player.getUUID(), player.getGameProfile().name());
+                this.memories.rememberName(player.getUUID(), player.getGameProfile().getName());
                 memoryBlock = this.memories.renderForPrompt(player.getUUID(), currentConfig);
             } else {
                 memoryBlock = "";
@@ -328,16 +328,16 @@ public final class AiChatService {
             skip = "并发已满";
         }
         if (skip != null) {
-            LOGGER.info("[AI] 进服问候跳过：{}（玩家 {}）", skip, player.getGameProfile().name());
+            LOGGER.info("[AI] 进服问候跳过：{}（玩家 {}）", skip, player.getGameProfile().getName());
             return;
         }
         long now = System.currentTimeMillis();
         Long last = this.lastGreetAt.get(player.getUUID());
         if (last != null && now - last < currentConfig.greetingCooldownSeconds() * 1000L) {
-            LOGGER.debug("[AI] 进服问候跳过：冷却中（玩家 {}）", player.getGameProfile().name());
+            LOGGER.debug("[AI] 进服问候跳过：冷却中（玩家 {}）", player.getGameProfile().getName());
             return;
         }
-        MinecraftServer server = player.level().getServer();
+        MinecraftServer server = player.serverLevel().getServer();
         if (server == null) {
             return;
         }
@@ -376,7 +376,7 @@ public final class AiChatService {
     /** 问候的事实行（主线程采集）。刻意精选：只报"一句话概况"用得上的，不倒全服家底。 */
     private List<String> collectGreetingFacts(ServerPlayer player, MinecraftServer server) {
         List<String> lines = new ArrayList<>();
-        lines.add("玩家名: " + player.getGameProfile().name());
+        lines.add("玩家名: " + player.getGameProfile().getName());
         lines.add("游玩总时长: " + GreetingPrompts.humanizePlaytime(
                 player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME))));
         lines.add("历史死亡次数: " + player.getStats().getValue(Stats.CUSTOM.get(Stats.DEATHS)));
@@ -385,8 +385,8 @@ public final class AiChatService {
         double tps = mspt <= 50.0D ? 20.0D : Math.min(20.0D, 1000.0D / mspt);
         lines.add(String.format(Locale.ROOT, "服务器负载: 平均 %.1f ms/tick（约 %.1f TPS）", mspt, tps));
         lines.add("服务器已连续运行: " + GreetingPrompts.humanizePlaytime(server.getTickCount()));
-        // 26.3 没有了 Level.getDayTime()：昼夜时钟独立成 WorldClock，主世界时钟即"游戏内天数"的计时源
-        lines.add("游戏内天数: 第 " + (server.overworld().getOverworldClockTime() / 24000L + 1L) + " 天");
+        // 使用主世界昼夜时间计算游戏内天数。
+        lines.add("游戏内天数: 第 " + (server.overworld().getDayTime() / 24000L + 1L) + " 天");
         return lines;
     }
 

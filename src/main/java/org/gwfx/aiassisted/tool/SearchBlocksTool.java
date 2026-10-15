@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -67,7 +67,7 @@ public final class SearchBlocksTool {
         if (rawId.isEmpty()) {
             return ToolOutcome.error("缺少参数 block_id（方块注册表 id，例如 minecraft:diamond_ore）");
         }
-        Identifier id = Identifier.tryParse(rawId.get());
+        ResourceLocation id = ResourceLocation.tryParse(rawId.get());
         if (id == null) {
             return ToolOutcome.error("block_id 不是合法的注册表 id：" + rawId.get());
         }
@@ -79,7 +79,7 @@ public final class SearchBlocksTool {
         Block target = resolved.get();
 
         int radius = ToolArgs.integer(args, "radius", DEFAULT_RADIUS, MIN_RADIUS, MAX_RADIUS);
-        ServerLevel level = player.level();
+        ServerLevel level = player.serverLevel();
         BlockPos origin = player.blockPosition();
         int radiusSqr = radius * radius;
 
